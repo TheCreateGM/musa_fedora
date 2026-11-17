@@ -75,7 +75,8 @@ repeat it after driver, runtime, or kernel changes.
   scriptlets suppressed. Packaged `musaInfo` detected the passed-through S30.
   SDK release 3 lacked the C++ header dependency, so the container compile
   failed; release 4 fixes the dependency and builds in Copr, but has not yet
-  been reinstalled and rerun in the container.
+  been reinstalled and rerun in the container. Its payload matches release 3,
+  and a non-mutating Fedora 45 RPM dependency check passed.
 * The 3.1.0 runtime headers are incomplete for compiling; use the 5.2.0 SDK
   compiler/headers while linking to the installed 1.5.4 runtime. Keep test code
   within the API exported by `libmusart.so.1.5.4`.

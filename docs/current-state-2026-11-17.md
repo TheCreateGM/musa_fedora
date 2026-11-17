@@ -96,9 +96,13 @@ the vendor copy test was killed by the container memory limit, and `mcc` lacked
 the C++ headers because SDK release 3 did not declare them. The verifier now
 checks both management-tool locations and supports `--skip-memcpy` for tight
 memory limits. SDK release 4 adds the missing header dependency and builds in
-all four Copr chroots. The release 4 package has not been reinstalled in a
-container because host memory pressure was high during this run. Thus the
-container has not yet verified the repaired package/compiler transaction.
+all four Copr chroots. Its 4,500-entry RPM file manifest matches release 3 in
+paths, file sizes, content digests, modes, ownership, and symlink targets; only
+directory/file timestamps differ. A non-mutating `rpm --nosignature -i --test`
+check passed on Fedora 45, confirming the installed package database satisfies
+release 4's dependencies. The release 4 package has not been reinstalled in a
+container because host memory availability was below 1 GiB. Thus no post-fix
+isolated `mcc` compile has been claimed.
 
 ## Known limits and safety
 
@@ -118,5 +122,6 @@ container has not yet verified the repaired package/compiler transaction.
   environment without a separate recovery plan.
 - The physical-host end-to-end test passed using the existing 1.5.4 runtime
   and 5.2.0 compiler. The latest SDK RPM's post-fix C++-header dependency has
-  built successfully, but its isolated package install and compile rerun remain
-  unverified.
+  built successfully, its payload matches the prior SDK RPM, and its RPM
+  dependency test passed without installing it. An isolated release 4 install
+  and compiler rerun remain unverified.

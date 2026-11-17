@@ -1,5 +1,10 @@
 # Root cause: MUSA runtime returns 801 on the MTT S30 (ENOTSUPPORTED)
 
+> Historical root-cause record (2026-11-16). The IOMMU fix below has since been
+> applied (`intel_iommu=on iommu=pt`); the reported 801 symptom no longer occurs
+> — see the [2026-11-17 current state](current-state-2026-11-17.md). Retained as
+> a dated analysis.
+
 Date: 2026-11-16
 Host: Fedora 45, kernel 7.3.3-300.fc45.x86_64, MTT S30 (`1ed5:0102`)
 

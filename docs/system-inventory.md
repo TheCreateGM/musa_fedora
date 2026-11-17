@@ -1,44 +1,53 @@
 # Live host inventory and verification record
 
-Latest live recheck: 2026-11-13. This describes observed host state; it is
-not vendor qualification or evidence of GPU execution. The complete current
-record is [here](live-host-recheck-2026-11-13.md). Earlier host snapshots
-below are historical.
+Latest live recheck: 2026-11-17. This describes observed host state on this
+Fedora host; Fedora is not a vendor-qualified S30 OS. The complete current
+record is [here](current-state-2026-11-17.md). Earlier host snapshots below
+are historical.
 
-## Latest live state
+## Latest live state — 2026-11-17
 
 | Item | Observed |
 |---|---|
 | Running kernel | `7.3.3-300.fc45.x86_64` |
-| Active command line | No `ibt=off` or `noibt` override; this boot logged an IBT control-protection fault |
-| S30 PCI binding | Unbound; PCI ID `1ed5:0102` at `0000:01:00.0` |
-| Loaded MTT modules | `mtgpu` remains loaded in `initstate=coming`, taint `OE`; the module was not unloaded |
-| Module file | An unowned `mtgpu.ko` is present in the running tree; its hash differs from the quarantined file recorded on 2026-11-12 and its origin is unknown |
-| Backup/quarantine | The 2026-11-12 quarantine action is historical; see the latest recheck before any recovery action |
-| Active display | Intel UHD Graphics 770 (`i915`) |
-| MTT device nodes | `/dev/mtgpu.0` absent; no S30-associated DRM render node |
-| Compiler check | Staged official 5.2.0 compile-only check passed for the default bundle and explicit `mp_10`; official product/architecture documentation maps S30 → SuDi → `MP_10`, but runtime execution is unverified |
-| Fresh module build | Isolated 7.3.3 module linked with matching vermagic and S30 alias; latest build logged 5,504 compiler/objtool warning lines |
-| GPU test | Blocked before runtime or application build; no physical GPU operation was attempted |
-| Security and boot | Secure Boot disabled; SELinux enforcing; initramfs and boot entries unchanged during this validation |
+| Active command line | `intel_iommu=on iommu=pt`; no `ibt=off` or `noibt` override |
+| Accelerator | Moore Threads MTT S30, PCI `1ed5:0102`, BDF `0000:01:00.0`, 4 GiB; audio function `1ed5:01ff` |
+| S30 PCI binding | Bound to vendor `mtgpu` 3.1.0; `initstate=live` |
+| Installed driver module | `/lib/modules/7.3.3-300.fc45.x86_64/extra/mtgpu.ko` (vermagic `7.3.3-300.fc45.x86_64`) |
+| IOMMU | Enabled; 13 IOMMU groups; S30 in group 11 |
+| MTT device nodes | `/dev/mtgpu.0` present; S30 DRM render node `/dev/dri/renderD129` present |
+| Active display | Intel UHD Graphics 770 (`i915`); the S30 is compute-only here |
+| Firmware | Installed under `/lib/firmware/mthreads/` |
+| Runtime | MUSA runtime 1.5.4 at `/usr/local/musa/` (`libmusart.so.1.5.4`); SDK 5.2.0 compiler/headers at `/usr/local/musa-5.2/` |
+| Telemetry | `mthreads-gmi` reports driver 3.1.0, MTT S30, 4096 MiB; MUSA 1.5.4 `musaInfo` detects one device |
+| Hardware tests | Vendor `muMemcpyTest` passes; host runtime API `tests/musart-smoke.c` passes; 5.2.0 `mcc` `mp_10` vector-add ran on the S30 (`PASS: 1048576 float adds verified on S30`) |
+| Verifier | `scripts/verify-musa.sh`: **11 passed, 0 failed, 0 skipped** |
+| Security and boot | Secure Boot disabled; SELinux enforcing |
 
-On 2026-11-13 the read-only verifier and GPU test gate both exited 3. The
-verifier reported that the S30 is unbound and `mtgpu` remains in `coming`;
-the gate stopped before runtime discovery or GPU access. A different
-unowned `mtgpu.ko` is now present in the current kernel tree than the one
-quarantined on 2026-11-12. No MUSA runtime query or GPU device operation was
-performed. The earlier post-quarantine snapshot below is historical.
+The supported combination on this host is driver `mtgpu` 3.1.0 + MUSA runtime
+1.5.4 + MUSA 5.2.0 compiler targeting `mp_10`. The separate 5.2.0 *runtime*
+is not compatible with the 3.1.0 driver ABI and must not be substituted for
+1.5.4.
+
+Full provider detail is in [current-state-2026-11-17.md](current-state-2026-11-17.md).
+
+## Historical snapshot — 2026-11-13 (superseded)
+
+On 2026-11-13 the S30 was unbound, the read-only verifier and GPU test gate
+both exited 3, and no MUSA runtime query or GPU device operation was
+performed. The verifier reported that the S30 was unbound and `mtgpu` remained
+in `coming`; the gate stopped before runtime discovery or GPU access. That
+unbound/`coming` state is historical and is superseded by the live table
+above. See the [2026-11-13 live host report](live-host-recheck-2026-11-13.md).
 
 The 2026-11-12 compiler output and isolated build logs are under
 `/home/axogm/Documents/project/musa-data/research/musa-fedora-live-validation-2026-11-12/`
-and its dated build directory.
-The 2026-11-12 build artifact remains uninstalled and unloaded. The module that failed
-during boot has an unverified origin and does not match those preserved build
-artifacts by hash. See the
+and its dated build directory. The 2026-11-12 build artifact remains
+uninstalled and unloaded; it is not the module now live on this host. See the
 [historical live host report](live-host-recheck-2026-11-12.md) and
 [compatibility assessment](compatibility.md).
 
-## Historical snapshots and events (superseded)
+## Earlier snapshots and events (superseded)
 
 The following entries record earlier checks and incidents. Their host-state
 statements are historical and are superseded by the latest live table above.

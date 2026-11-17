@@ -1,6 +1,6 @@
 # Official driver porting record
 
-## Current active source/build (2026-11-13)
+## Current active source/build (2026-11-17)
 
 The active project `Makefile`, `inc/`, and `src/` identify as S30 driver
 package version 3.1.0. The separate `driver-mtgpu-5.2.0/` source tree is not
@@ -9,11 +9,15 @@ and feature-probe helper into a fresh directory under `musa-data`, and pins
 the vendor core object to SHA-256
 `d0fdaceab37bce7387d376f8a87a2e9dbf210eeccf4f4f7c67f8dee83f4e8200`.
 
-The 2026-11-13 build linked for kernel 7.3.3 with matching vermagic and the
-S30 PCI alias. It emitted 5,504 compiler/objtool warning lines and is not
-approved for installation or loading. The artifact and full log are recorded
-in the [live host report](live-host-recheck-2026-11-13.md). No module was
-installed or loaded.
+The 2026-11-13 isolated build linked for kernel 7.3.3 with matching vermagic
+and the S30 PCI alias, emitting 5,504 compiler/objtool warning lines; that
+isolated artifact is not approved for installation as a replacement. A 3.1.0
+module is now installed at
+`/lib/modules/7.3.3-300.fc45.x86_64/extra/mtgpu.ko` and is loaded and live on
+this host, with the S30 bound and the four hardware tests passing (see the
+[current state](current-state-2026-11-17.md)). Do not install over the live
+module or unbind/rebind the device; the opaque vendor core still carries
+objtool/ENDBR warnings, so do not disable IBT/CET.
 
 ## Previous current-kernel build (2026-11-12)
 
@@ -166,7 +170,15 @@ approved for a hardware test. The complete output is archived at
 
 ## Acceptance gates
 
-Before any physical load test, the port must build cleanly against the intended kernel, pass static review of the affected memory-management and synchronization paths, and be exercised in a disposable test environment where practical. A successful module build alone is not evidence that the S30 initializes or executes MUSA code. Driver loading, device initialization, VRAM/DMA access, toolkit compilation, GPU execution, and recovery behavior each require separate evidence.
+A successful module build alone is not evidence that the S30 initializes or
+executes MUSA code; driver loading, device initialization, VRAM/DMA access,
+toolkit compilation, GPU execution, and recovery behavior each require
+separate evidence. On this host those layers have now been separately
+exercised for the four verified checks (see the
+[current state](current-state-2026-11-17.md)). Any replacement artifact must
+still build against the intended kernel, pass static review of the affected
+memory-management and synchronization paths, and be exercised in a disposable
+test environment before it is installed over the live module.
 
 ## Earlier manual clean isolated rebuild (2026-11-12)
 

@@ -1,5 +1,10 @@
 # MUSA on Fedora — MTT S30 — Implementation Plan (2026-11-16)
 
+> Historical planning snapshot (2026-11-16). Its "still open" items were
+> subsequently resolved; see the
+> [2026-11-17 current state](current-state-2026-11-17.md) and the project
+> [README](../README.md). Retained as a dated record.
+
 Host: Fedora 45 Workstation, x86_64, kernel 7.3.3-300.fc45.x86_64
 GPU: Moore Threads MTT S30 (`1ed5:0102`) at 0000:01:00.0
 

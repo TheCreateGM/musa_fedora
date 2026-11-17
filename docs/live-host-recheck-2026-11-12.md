@@ -1,5 +1,9 @@
 # Live host recheck — 2026-11-12
 
+> Historical snapshot (2026-11-12). Superseded by the
+> [2026-11-17 current state](current-state-2026-11-17.md) and the project
+> [README](../README.md); retained as a dated record.
+
 This report supersedes earlier present-tense host descriptions recorded while
 kernel `7.2.15-300.fc45.x86_64` was running. The live host is Fedora 45 on
 kernel `7.3.3-300.fc45.x86_64`.

@@ -70,7 +70,8 @@ load/unload/rebind, or system configuration change was performed.
 - Runtime: MUSA 1.5.4 `musaInfo` succeeded and detected one device;
   `muMemcpyTest` succeeded.
 - Compiler: MUSA 5.2.0 `mcc`, target `mp_10`.
-- GPU execution: `scripts/verify-musa.sh` completed **10 passed, 0 failed**;
+- GPU execution: `scripts/verify-musa.sh` completed **11 passed, 0 failed,
+  0 skipped** (including the host runtime API `tests/musart-smoke.c`);
   vector-add output was `PASS: 1048576 float adds verified on S30`.
   This verifies the tested kernel and runtime path only, not general workload
   compatibility.

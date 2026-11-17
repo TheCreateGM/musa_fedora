@@ -32,13 +32,15 @@ Command: `bash scripts/verify-musa.sh`.
 | `mthreads-gmi` device/driver report | Passed; MTT S30, driver 3.1.0, 4096 MiB |
 | MUSA 1.5.4 `musaInfo` | Passed; one device detected |
 | Vendor `muMemcpyTest` | Passed |
+| MUSA runtime host API (`tests/musart-smoke.c`) | Passed on the S30; alloc/free, H2D+D2H copies, memset, streams, events |
 | MUSA 5.2.0 `mcc`, `mp_10` vector-add | Passed; 1,048,576 results verified on the S30 |
-| Overall | **10 passed, 0 failed** |
+| Overall | **11 passed, 0 failed, 0 skipped** |
 
 The working combination exercised was the installed MUSA 1.5.4 runtime with
 the MUSA 5.2.0 compiler targeting `mp_10`. This verifies device discovery,
-the vendor copy test, and this vector-add only. It does not validate other
-libraries, frameworks, graphics, video, audio, or general workload support.
+the vendor copy test, the host runtime API, and this vector-add only. It does
+not validate other libraries, frameworks, graphics, video, audio, or general
+workload support.
 The desktop remains on Intel graphics.
 
 The shell currently defaults `LD_LIBRARY_PATH` to `/usr/local/musa-5.2/lib`.
@@ -58,7 +60,7 @@ all four chroots:
 | `mtgpu-dkms` | `3.1.0-5` | [11339362](https://copr.fedorainfracloud.org/coprs/build/11339362) |
 | `mtgpu-firmware` | `3.1.0-2` | [11339153](https://copr.fedorainfracloud.org/coprs/build/11339153) |
 | `musa-runtime` | `1.5.4-3` | [11339379](https://copr.fedorainfracloud.org/coprs/build/11339379) |
-| `musa-sdk` | `5.2.0-4` | [11339389](https://copr.fedorainfracloud.org/coprs/build/11339389) |
+| `musa-sdk` | `5.2.0-6` | [11339529](https://copr.fedorainfracloud.org/coprs/build/11339529) |
 | `musa-toolkit` | `3.1.0-1` | [11339164](https://copr.fedorainfracloud.org/coprs/build/11339164) |
 
 The `mtgpu-dkms` build validates compilation and packaging against the kernel
@@ -70,8 +72,11 @@ the upstream [DRM fbdev-helper move and header rename](https://git.zx2c4.com/lin
 
 The runtime release 3 removes an obsolete `mesa-libglapi` package requirement:
 the vendor runtime ships `libglapi_musa.so.0`, and Fedora 44+ does not provide
-the old package name. SDK release 4 declares `libstdc++-devel`, which provides
-the C++ headers required by `mcc` (including `<cmath>`).
+the old package name. SDK release 4 first declared a C++ header dependency for
+`mcc`; the current release 6 ships the `clang-offload-bundler` link stage and
+requires `gcc-c++`, which is what provides the `libstdc++.so` linker symlink
+(see the container section below). SDK build 11339529 (release 6) succeeded in
+all four chroots.
 
 The rebuild history is retained under the ignored `.logs/copr-2026-11-17/`
 directory. Build 11339303 (release 3) failed because `modinfo` was absent from
@@ -86,23 +91,39 @@ The Fedora 45 RPMs for the five packages passed `rpm -K --nosignature` digest
 verification. Copr's OpenPGP signatures were not independently trusted in the
 container (`NOKEY`); the digest checks passed.
 
-An isolated Fedora 45 container with a 1.5 GiB memory limit, two CPUs, and
-explicit S30 device-node passthrough installed the Copr RPM set using
-`tsflags=noscripts`. The install completed; DKMS and package scriptlets were
-suppressed, so no module was built or changed. With runtime 1.5.4 installed,
-`musaInfo` detected the S30. The first full verifier run reported 6 passed and
-3 failed: its management-tool path did not match the RPM's `/usr/bin` location,
-the vendor copy test was killed by the container memory limit, and `mcc` lacked
-the C++ headers because SDK release 3 did not declare them. The verifier now
-checks both management-tool locations and supports `--skip-memcpy` for tight
-memory limits. SDK release 4 adds the missing header dependency and builds in
-all four Copr chroots. Its 4,500-entry RPM file manifest matches release 3 in
-paths, file sizes, content digests, modes, ownership, and symlink targets; only
-directory/file timestamps differ. A non-mutating `rpm --nosignature -i --test`
-check passed on Fedora 45, confirming the installed package database satisfies
-release 4's dependencies. The release 4 package has not been reinstalled in a
-container because host memory availability was below 1 GiB. Thus no post-fix
-isolated `mcc` compile has been claimed.
+### Isolated container install and real-GPU test
+
+`scripts/test-container-install.sh` installs the locally built RPM set into a
+throwaway Fedora 45 container with only the S30 device nodes passed through, and
+then exercises the packaged runtime and compiler against the physical MTT S30.
+It suppresses RPM scriptlets (`tsflags=noscripts`), so no kernel module is
+built, loaded, or replaced, and it does not touch the host package database.
+
+The current run of the five-RPM set (`mtgpu-dkms` 3.1.0-5, `mtgpu-firmware`
+3.1.0-2, `musa-runtime` 1.5.4-3, `musa-sdk` 5.2.0-6, `musa-toolkit` 3.1.0-1)
+reports `CONTAINER_SUMMARY: 13 passed, 0 failed` and
+`TEST_CONTAINER_INSTALL_STATUS: SUCCESS`. The 13 checks cover: the RPM set
+installs and resolves its declared dependencies; the packaged files are present
+(`libmusart.so.1.5.4`, `musaInfo`, `mthreads-gmi`, `mcc`, and both
+`musa_runtime.h` headers); the C++ standard headers and the packaged `clang++`
+resolve `<cmath>`; `musaInfo` discovers the passed-through S30; the vendor
+`muMemcpyTest` runs; `tests/musart-smoke.c` builds and runs; and the packaged
+`mcc` builds an `mp_10` vector-add that runs on the S30 and verifies 1,048,576
+results.
+
+Two real packaging defects were found and fixed through this gate:
+
+- `clang-offload-bundler` was missing from the SDK payload, so every `mcc` link
+  failed with `Executable "clang-offload-bundler" doesn't exist!`. Release 5
+  ships it (together with `clang-offload-wrapper`).
+- The SDK declared `libstdc++-devel`, but Fedora ships the unversioned
+  `libstdc++.so` linker symlink only in `gcc-c++`; linking failed with
+  `cannot find -lstdc++`. Release 6 requires `gcc-c++` instead, which pulls the
+  C++ headers transitively.
+
+Staging the SDK tarball needs roughly 3.5 GiB, so the staging and packaging
+scripts must run with `TMPDIR=/var/tmp` here: `/tmp` is a small tmpfs and the
+default staging directory exceeds its per-user quota.
 
 ## Known limits and safety
 
@@ -121,7 +142,8 @@ isolated `mcc` compile has been claimed.
   container package test. Do not install the RPM stack over the working host
   environment without a separate recovery plan.
 - The physical-host end-to-end test passed using the existing 1.5.4 runtime
-  and 5.2.0 compiler. The latest SDK RPM's post-fix C++-header dependency has
-  built successfully, its payload matches the prior SDK RPM, and its RPM
-  dependency test passed without installing it. An isolated release 4 install
-  and compiler rerun remain unverified.
+  and 5.2.0 compiler, and the isolated container install plus real-GPU rerun of
+  the current five-RPM set (SDK 5.2.0-6) passes end to end: 13 checks, 0
+  failures. The container gate exercises the packaged `mcc` on the S30 as a
+  fully installed set; it still does not validate graphics, video, or
+  frameworks.

@@ -4,10 +4,13 @@ The active `src/`, `inc/`, and `Makefile` tree identifies as the S30 driver
 package version 3.1.0. The separate `driver-mtgpu-5.2.0/` tree is research
 and build work for the MUSA 5.2.0 server driver; it is not the source used by
 the current isolated S30 build. The authoritative current host snapshot is
-the [2026-11-13 live recheck](live-host-recheck-2026-11-13.md): kernel 7.3.3,
-S30 unbound, Intel `i915` active, and a boot-loaded `mtgpu` stuck in
-initialization after an IBT control-protection fault. No module is approved
-for loading.
+the [current state](current-state-2026-11-17.md): kernel 7.3.3, `mtgpu` 3.1.0
+loaded and live (`initstate=live`) with the MTT S30 bound at `0000:01:00.0`
+(`1ed5:0102`), IOMMU enabled (`intel_iommu=on iommu=pt`, S30 in group 11),
+`/dev/mtgpu.0` and the S30 render node `/dev/dri/renderD129` present, with the
+Intel `i915` GPU still driving the desktop. The earlier
+[2026-11-13 live recheck](live-host-recheck-2026-11-13.md) (unbound S30,
+`initstate=coming`, no device nodes) is now historical.
 
 ## Production tree
 
@@ -32,18 +35,23 @@ module output under `musa-data`; it does not install or load a module:
 
 <pre><code>./scripts/build-kernel-driver.sh "$(uname -r)"</code></pre>
 
-The latest clean 3.1.0 build linked for kernel 7.3.3 in a fresh directory
-under `musa-data/research/builds`. It has matching vermagic and an S30 alias,
-but 5,504 compiler/objtool warning lines block loading.
-It remains uninstalled and unloaded. Review of the vendor core, driver
-initialization, and GPU execution remain unverified.
+The latest clean 3.1.0 build was produced for kernel 7.3.3 in a fresh
+directory under `musa-data/research/builds`. It has matching vermagic and an
+S30 alias but carries 5,504 compiler/objtool warning lines. A 3.1.0 module is
+installed at
+`/lib/modules/7.3.3-300.fc45.x86_64/extra/mtgpu.ko` and is loaded and live on
+this host; the isolated build artifact in `musa-data` is not what is
+installed. Review of the vendor core, driver initialization, and GPU
+execution is partly validated: the S30 is bound and live, and the four
+hardware-verified tests below pass.
 See
 [driver-porting.md](driver-porting.md) for results and safety gates.
 
-There is no complete installer or uninstaller because no driver artifact has
-passed the IBT/objtool gate or a physical S30 test. The two quarantine scripts
-are recovery tools for known unvalidated artifacts; they do not install MUSA
-support.
+The five Fedora RPM specs (`mtgpu-dkms`, `mtgpu-firmware`, `musa-runtime`,
+`musa-sdk`, `musa-toolkit`) describe the intended packaging, but the running
+stack is currently unowned. Do not install over the live module or unbind the
+device. The two quarantine scripts are recovery tools for known unvalidated
+artifacts; they do not install MUSA support.
 
 ## Research archive
 
@@ -69,10 +77,13 @@ of the official driver source is under
 <code>musa-data/research/official-musa-5.2.0/project-tree-attempt-2026-11-06/</code>;
 it is unreviewed and does not build into a usable module.
 
-## Future implementation boundary
+## Implementation boundary
 
-The remaining stack still needs separately validated kernel-driver, runtime,
-compiler, and device-execution layers. PCI enumeration or a successful compile
-alone will not establish hardware support. Installation and removal procedures
-must wait until those layers are supported and physical-device behavior has
-been tested.
+A hardware-verified path now exists for device discovery, the vendor copy
+test, the host MUSA runtime API (`tests/musart-smoke.c`), and one `mp_10`
+vector-add kernel (`scripts/verify-musa.sh`: 11 passed, 0 failed, 0 skipped).
+Everything beyond those four checks — OpenCL, OpenGL/Vulkan, video,
+`torch_musa`, and general frameworks — still needs separately validated
+kernel-driver, runtime, compiler, and device-execution layers. Fedora is not a
+vendor-qualified S30 OS. Installation over the live module and unbind/rebind
+remain unapproved until those layers have been examined for safety.

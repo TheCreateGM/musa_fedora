@@ -1,5 +1,9 @@
 # Current State — updated 2026-11-17
 
+> Earlier snapshot. The canonical current-state record is
+> [current-state-2026-11-17.md](current-state-2026-11-17.md) (and the project
+> [README](../README.md)); where the two differ, that record governs.
+
 Fedora Linux 45 Workstation, x86_64, kernel `7.3.3-300.fc45.x86_64` (64-bit),
 Intel Core i5-13500 with Intel UHD Graphics 770 (i915 display), plus a **Moore
 Threads MTT S30** (`1ed5:0102`, 4 GiB, 2 cores) on `0000:01:00.0`.

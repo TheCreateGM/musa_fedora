@@ -1,20 +1,21 @@
 # Moore Threads compatibility assessment
 
 The latest live host evidence is in the
-[2026-11-13 report](live-host-recheck-2026-11-13.md). Vendor-support research
-below was reviewed on 2026-11-12.
+[current state](current-state-2026-11-17.md). Vendor-support research below was
+reviewed on 2026-11-12.
 
 ## Current host status
 
 - Fedora Linux 45 Workstation, x86_64, kernel `7.3.3-300.fc45.x86_64`.
-- The MTT S30 is visible at `0000:01:00.0`, PCI ID `1ed5:0102`, and remains
-  unbound. The Intel UHD Graphics 770 (`i915`) is the active display GPU.
-- An unowned `mtgpu.ko` loaded during boot and failed in module initialization
-  with a kernel IBT control-protection fault at `rmapi_alloc`. The resident
-  module remains `initstate=coming`, taint `OE`; do not access or unload it.
-- A different unowned module file is currently present in the 7.3.3 module
-  tree than the one quarantined on 2026-11-12. Its origin is unknown.
-- `/dev/mtgpu.0` is absent, and no DRM render node is associated with the S30.
+- The MTT S30 is at `0000:01:00.0`, PCI ID `1ed5:0102`, bound to the vendor
+  `mtgpu` 3.1.0 driver (`initstate=live`). `/dev/mtgpu.0` and the S30 DRM
+  render node `/dev/dri/renderD129` are present.
+- IOMMU is enabled (`intel_iommu=on iommu=pt`); the S30 is in IOMMU group 11.
+- The Intel UHD Graphics 770 (`i915`) remains the active display GPU; the S30
+  is compute-only here.
+- MUSA runtime 1.5.4 detects the S30 (`musaInfo`), the vendor `muMemcpyTest`
+  passes, the host runtime API passes (`tests/musart-smoke.c`), and a 5.2.0
+  `mcc` `mp_10` vector-add ran on the S30.
 
 ## Vendor support boundary
 
@@ -37,10 +38,14 @@ identifies S30 as SuDi architecture. The official [MUSA 4.3 architecture
 guide](https://docs.mthreads.com/musa-sdk/version-4.3.x/programming_guide/Chapter02/)
 maps SuDi to `MP_10`, and its [MCC user
 manual](https://docs.mthreads.com/musa-sdk/version-4.3.x/api/mcc_um.zh-CN/)
-lists `mp_10` as an offload target. This supports `mp_10` as the S30
-code-generation target. The staged 5.2.0 compiler also emits `mp_10`, but
-neither executable was run; 5.2.0 runtime and device compatibility remain
-unverified. See the [target evidence record](../../musa-data/research/official-musa-5.2.0/s30-mp10-target-evidence-2026-11-12.md).
+lists `mp_10` as an offload target. This is now confirmed on hardware: the
+5.2.0 compiler built `tests/musa-vector-add.mu` for `--offload-arch=mp_10`
+and it ran on the S30. The supported combination on this host is driver
+`mtgpu` 3.1.0 + MUSA runtime 1.5.4 + MUSA 5.2.0 compiler (`mp_10`). The
+separate 5.2.0 *runtime* is not compatible with the 3.1.0 driver ABI
+(`sizeof(struct musaDeviceProp)` is 728 bytes in 1.5.4 vs 1032 in 5.2.0) and
+must not be substituted for 1.5.4. See the [target evidence
+record](../../musa-data/research/official-musa-5.2.0/s30-mp10-target-evidence-2026-11-12.md).
 
 Framework support is separate from the kernel driver and runtime. A working
 `torch_musa` or MUSA SDK compiler does not prove the S30 driver works on
@@ -50,25 +55,28 @@ Fedora.
 
 - A fresh isolated build linked for kernel 7.3.3, with matching vermagic and
   an S30 PCI alias. The latest S30 3.1.0 build logged 5,504
-  compiler/objtool warning lines. The artifact is not installed or
-  load-approved.
-- The staged official MUSA 5.2.0 compiler passed compile-only checks for its
-  default `mp_21`–`mp_32` fat binary and explicit `mp_10` output. Runtime
-  headers passed syntax checking. Neither executable ran.
-- The read-only verifier and gated GPU script both exited 3. The S30 is
-  unbound and the resident module is not fully initialized. No runtime query,
-  VRAM allocation, DMA transfer, GPU kernel, display, or audio test ran in
-  this validation pass.
-- An earlier `musaInfo` query reported error 100, “no MUSA-capable device is
-  detected.” That older observation is not a current runtime test.
+  compiler/objtool warning lines; the resulting module is installed and live
+  (`initstate=live`).
+- The official MUSA 5.2.0 compiler passed compile-only checks for its default
+  `mp_21`–`mp_32` fat binary and explicit `mp_10` output, and went on to
+  build `tests/musa-vector-add.mu` for `mp_10`, which ran on the S30
+  (`PASS: 1048576 float adds verified on S30`).
+- The read-only verifier (`scripts/verify-musa.sh`) reports **11 passed, 0
+  failed, 0 skipped**. The vendor `muMemcpyTest` passes, MUSA 1.5.4
+  `musaInfo` detects one device, and the host runtime API
+  (`tests/musart-smoke.c`) passes on the S30.
+- The older observation that `musaInfo` returned error 100, “no MUSA-capable
+  device is detected,” applied while the S30 was unbound; it is no longer the
+  current state.
 
 ## Compatibility conclusion
 
-The S30 PCI ID is recognized by staged vendor source, and the SDK compiler
-can produce MUSA device-code bundles. Fedora 45 + kernel 7.3.3 + MTT S30 is
-not qualified: the opaque core fails IBT initialization, objtool reports
-extensive safety warnings, version-specific S30 runtime support is
-unestablished, and no physical GPU test has passed. Do not disable IBT/CET,
-modify vendor-core metadata, or load another MTGPU module. A vendor-provided
-IBT-safe core or complete source and an S30-qualified driver/runtime matrix
-are needed before hardware validation.
+The S30 PCI ID is recognized by vendor source, the vendor `mtgpu` 3.1.0
+driver is live on Fedora 45 + kernel 7.3.3, and a hardware-verified MUSA path
+exists (device discovery, vendor copy test, host runtime API, and one `mp_10`
+vector-add kernel). This covers only those four checks; OpenCL, OpenGL/Vulkan,
+video, `torch_musa`, and general frameworks are not tested or claimed. Fedora
+is not a vendor-qualified S30 OS, so the stack is verified on this host but
+not vendor-qualified. Do not disable IBT/CET, modify vendor-core metadata, or
+load another MTGPU module. Broader features and an S30-qualified
+driver/runtime matrix are needed before extending the claim.

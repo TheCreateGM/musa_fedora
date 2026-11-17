@@ -1,7 +1,7 @@
 # Troubleshooting
 
 Current facts and logs are in the
-[live host recheck](live-host-recheck-2026-11-13.md).
+[current state](current-state-2026-11-17.md).
 
 ## Read-only host check
 
@@ -11,28 +11,34 @@ Run:
 ./scripts/verify-musa.sh
 ```
 
-Exit status 3 is expected while the S30 is unbound or any MTGPU module is not
-fully initialized. The verifier reads PCI/sysfs and device-node metadata; it
-does not open the GPU node or initialize the MUSA runtime.
+On this host the S30 is bound and the `mtgpu` 3.1.0 module is live, so the
+verifier reports **11 passed, 0 failed, 0 skipped** and exits 0. A non-zero
+exit status (previously 3) indicates the S30 is unbound or an MTGPU module is
+not fully initialized. The verifier reads PCI/sysfs and device-node metadata;
+it does not open the GPU node or initialize the MUSA runtime.
 
-## Current module failure
+## Driver and module state
 
-The boot-loaded, unowned module reported `Missing ENDBR: rmapi_alloc` and a
-kernel IBT control-protection fault. It remains resident in
-`initstate=coming`; do not query the runtime, open a GPU node, or try to
-unload it in this boot. An unowned module file is currently present in the running kernel tree, with
-a different hash from the file quarantined on 2026-11-12. Its origin is
-unknown. Do not query the runtime, open a GPU node, unload the module, or
-restore the historical backup. The quarantine script's `--plan` mode is
-read-only.
+The vendor `mtgpu` 3.1.0 driver is loaded and live
+(`/sys/module/mtgpu/initstate=live`) on kernel `7.3.3-300.fc45.x86_64`, with
+`/dev/mtgpu.0` and the S30 render node `/dev/dri/renderD129` present. Do not
+unbind or rebind the live device: a rebind can fault inside
+`mtgpu_pstate_notifier_call_chain` (see
+[root-cause-rebind-2026-11-16.md](root-cause-rebind-2026-11-16.md)). Do not
+install a new module over the live one in this session, and do not disable
+IBT/CET or patch vermagic.
+
+Earlier boots recorded a module failing with `Missing ENDBR: rmapi_alloc` and
+an IBT control-protection fault while `initstate=coming`; that state is
+historical and is superseded by the live state above.
 
 ## Build and compiler checks
 
-The latest isolated S30 3.1.0 kernel build for 7.3.3 linked, but reported
-5,504 compiler/objtool warning lines. Do not install or load the artifact.
-The staged
-MUSA 5.2.0 compiler passes compile-only checks; its output was not run and
-does not prove S30 compatibility. Build logs are under
+A 3.1.0 module is installed and live, so the stack runs. The isolated fresh
+S30 3.1.0 kernel build in `musa-data` for 7.3.3 emitted 5,504 compiler/objtool
+warning lines and is not approved for installation as a replacement. The
+MUSA 5.2.0 compiler built `tests/musa-vector-add.mu` for `mp_10`, which ran on
+the S30. Build logs are under
 `/home/axogm/Documents/project/musa-data/research/musa-fedora-live-validation-2026-11-12/`
 and `musa-data/research/builds/`.
 

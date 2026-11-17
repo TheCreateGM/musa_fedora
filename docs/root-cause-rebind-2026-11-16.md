@@ -1,5 +1,10 @@
 # Rebind failure root cause — 2026-11-16 (current boot)
 
+> Dated root-cause record (2026-11-16). The failure it describes was observed in
+> an earlier boot; the present host has the S30 bound and live (see the
+> [2026-11-17 current state](current-state-2026-11-17.md)). The finding remains a
+> live safety caveat: do not unbind/rebind the device.
+
 ## Symptom
 - `verify-musa.sh`: 5 PASS / 5 FAIL. PCI + `mtgpu` bound + `/dev/mtgpu.0` + IOMMU OK;
   no mtgpu DRM render node, `mthreads-gmi` fails, `musaInfo`/`muMemcpyTest` fail

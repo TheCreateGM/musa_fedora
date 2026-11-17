@@ -1,9 +1,10 @@
 # MUSA driver and SDK availability
 
 Current live host state is recorded in the
-[2026-11-13 recheck](live-host-recheck-2026-11-13.md). Vendor/package research
+[current state](current-state-2026-11-17.md). Vendor/package research
 below was reviewed 2026-11-12. The staged official Mthreads 5.2.0 source recognizes the
-S30 PCI ID. This is source-level recognition, not runtime qualification.
+S30 PCI ID. This is source-level recognition; on this host it has since been
+confirmed in practice (driver 3.1.0 live, runtime 1.5.4 detects the S30).
 The current public SDK catalogue lists MUSA 5.2.0 Linux packages for MTT
 S5000 and does not list S30 among its product filters or package targets.
 Older catalog entries list selected S3000/S4000/S80 and CPU/OS combinations,
@@ -127,10 +128,13 @@ lists <code>mp_10</code> as an offload target. The 5.2.0 DKMS source also
 routes S30 PCI ID <code>0x0102</code> through <code>sudi_drvdata</code> in
 <code>src/mtgpu/mtgpu_drv.c</code>. Together, these official sources support
 <code>mp_10</code> as the S30 code-generation target. The staged official MUSA
-5.2.0 compiler also accepts <code>--offload-arch=mp_10</code> and emits the
-compile-only vector-add executable. Neither the 5.2.0 code nor any runtime
-was executed on the S30. This architecture mapping does not establish that
-the 5.2.0 driver, firmware, runtime, or libraries support S30. A dated source
+5.2.0 compiler also accepts <code>--offload-arch=mp_10</code>, and this is now
+confirmed on hardware: it built <code>tests/musa-vector-add.mu</code> for
+<code>mp_10</code>, which ran on the S30 (<code>PASS: 1048576 float adds
+verified on S30</code>). The supported runtime remains MUSA 1.5.4; the
+separate 5.2.0 runtime is not compatible with the 3.1.0 driver ABI. This
+architecture mapping alone still does not establish that the 5.2.0 driver,
+firmware, or libraries support S30. A dated source
 and version assessment is in
 <code>musa-data/research/official-musa-5.2.0/s30-mp10-target-evidence-2026-11-12.md</code>.
 
@@ -152,13 +156,15 @@ The official 5.2.0 compiler, assembler, runtime, development headers, toolkit co
 | <code>musa-toolkit-5-2_5.2.0_amd64.deb</code> | <code>f6a29a25f1d18c4595ba5bca6ffe942109acfa861b07ac1f236a54bbb7abb38d</code> |
 | <code>musa-compiler-5-2_5.2.0_amd64.deb</code> | <code>6d39e1e4a53e8fb8d5bcde6a56b1cdc0aeac594d21c717e9fec0b9d1d2ef6657</code> |
 
-Using the extracted 5.2.0 toolchain, a vector-add program was compiled and linked as an x86-64 executable. <code>readelf</code> confirmed <code>.mtFatBinSegment</code>, and its embedded offload bundles identify <code>mp_21</code>, <code>mp_22</code>, <code>mp_31</code>, and <code>mp_32</code>. This verifies only that the vendor compiler and host linker produce an executable; it does not identify which target, if any, is the S30 target. The extracted compiler header mentions <code>mp_31</code>, and the DKMS table recognizes the S30 PCI ID, but the reviewed vendor materials do not map the S30 model to any of these targets. The test executable was not run.
+Using the extracted 5.2.0 toolchain, a vector-add program was compiled and linked as an x86-64 executable. <code>readelf</code> confirmed <code>.mtFatBinSegment</code>, and its embedded offload bundles identify <code>mp_21</code>, <code>mp_22</code>, <code>mp_31</code>, and <code>mp_32</code>. That default-bundle executable was not run. A separate explicit <code>mp_10</code> build was later run on the S30 (see <code>tests/musa-vector-add.mu</code> below and in the [current state](current-state-2026-11-17.md)).
 
 The installed-tree <code>musaInfo</code> was queried during the 2026-11-12
 check and reported <code>no MUSA-capable device is detected</code> (API error
-100). The staged official compiler passed compile-only checks, including the
-default bundle and explicit <code>mp_10</code> build, but no generated
-executable or GPU kernel was run.
+100) while the S30 was unbound; that is historical. MUSA runtime 1.5.4 now
+detects one device on the live S30. The staged official compiler passed
+compile-only checks, including the default bundle and explicit
+<code>mp_10</code> build; the <code>mp_10</code> executable has since been run
+on the S30.
 
 ## Isolated build result
 
@@ -192,12 +198,17 @@ Research patches and the extracted vendor source remain under <code>musa-data</c
 ## Compatibility decision
 
 The source recognizes the S30 PCI ID, and compile/link builds exist for
-kernels 7.2.15 and 7.3.3. The fresh 7.3.3 build reports 1,837 ENDBR-related
-warnings and four missing-<code>int3</code> warnings. A separate boot-loaded
-module produced an actual IBT control-protection fault. No artifact is
-load-approved. Official architecture materials support <code>mp_10</code> as
-the S30 code-generation target, but no hardware result confirms execution and
-the public documentation does not qualify Fedora 45 + Intel + S30.
+kernels 7.2.15 and 7.3.3. On this host the vendor `mtgpu` 3.1.0 driver is now
+installed and live with the S30 bound, and hardware results confirm execution:
+runtime 1.5.4 detects the device, the vendor `muMemcpyTest` passes, the host
+runtime API (`tests/musart-smoke.c`) passes, and a 5.2.0 `mcc` `mp_10`
+vector-add ran on the S30 (`scripts/verify-musa.sh`: 11 passed, 0 failed, 0
+skipped). Official architecture materials support <code>mp_10</code> as the
+S30 code-generation target. The public documentation still does not qualify
+Fedora 45 + Intel + S30, so the stack is verified on this host but not
+vendor-qualified. The isolated 3.1.0 build in `musa-data` still reports
+compiler/objtool warnings and is not approved for installation as a
+replacement for the live module.
 
 Static inspection of the staged official 5.2.0 core archive found mixed IBT
 metadata: 412 of 413 ELF members advertise IBT, while `mt-rm.o`—the member
@@ -208,11 +219,11 @@ boot-loaded module used the same archive; its origin is unverified. See the
 [core-object analysis](/home/axogm/Documents/project/musa-data/research/builds/mtgpu-7.3.3-300.fc45.x86_64-ZEbZhc/ibt-core-analysis.md)
 for the archive hash, exact objtool counts, and reproduction commands.
 
-The earlier 7.2.15 boot with `ibt=off` and its persistent boot-entry cleanup
-are historical. The current 7.3.3 boot has IBT enabled; the driver faulted
-under that protection. Do not disable IBT/CET, alter vendor-core metadata,
-load an unreviewed module, install Ubuntu packages directly, or run GPU tests
-against the current resident module.
+The earlier 7.2.15 boot with `ibt=off`, its persistent boot-entry cleanup, and
+the 2026-11-13 boot where the driver faulted under IBT are historical. The
+present 7.3.3 boot has IBT enabled and the vendor driver is live with the S30
+bound. Do not disable IBT/CET, alter vendor-core metadata, install over the
+live module, unbind/rebind the device, or install Ubuntu packages directly.
 
 The missing vendor confirmations are collected in the local
 [support request draft](vendor-support-request-draft.md). It has not been sent.

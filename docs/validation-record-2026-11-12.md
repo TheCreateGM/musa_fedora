@@ -1,5 +1,9 @@
 # Validation record — 2026-11-12
 
+> Historical snapshot (2026-11-12). Superseded by the
+> [2026-11-17 current state](current-state-2026-11-17.md) and the project
+> [README](../README.md); retained as a dated record.
+
 ## Later live recheck — kernel 7.3.3
 
 The later recheck is authoritative for the current host; the 7.2.15 inventory

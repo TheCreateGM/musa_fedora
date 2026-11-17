@@ -1,31 +1,33 @@
 # Driver loading and recovery status
 
-## Current host state — 2026-11-13
+## Current host state — 2026-11-17
 
-The MTT S30 (`1ed5:0102`) is visible and unbound on Fedora 45 kernel
-`7.3.3-300.fc45.x86_64`. The Intel UHD 770 (`i915`) remains the active
-display GPU. No `/dev/mtgpu.0` node or S30-associated DRM render node exists.
+The MTT S30 (`1ed5:0102`, `0000:01:00.0`) is bound to the vendor `mtgpu`
+3.1.0 driver on Fedora 45 kernel `7.3.3-300.fc45.x86_64`. The module is loaded
+and live (`/sys/module/mtgpu/initstate=live`) from
+`/lib/modules/7.3.3-300.fc45.x86_64/extra/mtgpu.ko`. Both `/dev/mtgpu.0` and
+the S30 DRM render node `/dev/dri/renderD129` are present. IOMMU is enabled
+(`intel_iommu=on iommu=pt`); the S30 is in IOMMU group 11. The Intel UHD 770
+(`i915`) remains the active display GPU; the S30 is compute-only here.
 
-An unowned `mtgpu.ko` was loaded at boot and failed with `Missing ENDBR:
-rmapi_alloc`, followed by a kernel control-protection fault. The resident
-module remains in `initstate=coming`, with taint `OE`; the kernel is tainted.
-An unowned module file is currently present in the 7.3.3 tree, but its hash
-differs from the file recorded as quarantined on 2026-11-12. Its origin is
-unknown. Do not access the GPU, query the runtime, or try to unload the
-module.
+The vendor `muMemcpyTest` passes, MUSA 1.5.4 `musaInfo` detects one device,
+the host runtime API (`tests/musart-smoke.c`) passes, and a 5.2.0 `mcc`
+`mp_10` vector-add ran on the S30. `scripts/verify-musa.sh` reports **11
+passed, 0 failed, 0 skipped**.
 
-The [latest live report](live-host-recheck-2026-11-13.md) has the current
-hash and state. The earlier quarantine and its restore command are documented
-in the [2026-11-12 report](live-host-recheck-2026-11-12.md); do not apply
-that restore action based on the historical state alone.
+Because the module is live, do **not** install over it, unbind, or rebind the
+device. An unbind/rebind can fault inside
+`mtgpu_pstate_notifier_call_chain` (see
+[root-cause-rebind-2026-11-16.md](root-cause-rebind-2026-11-16.md)).
 
 ## Historical quarantine and recovery
 
-The 2026-11-12 quarantine action targeted a different, hash-pinned module.
-The current file has a different hash, so do not run the historical restore
-command against the current host state. The script refuses to overwrite a
-different file at the target, but the `--restore` action is unnecessary and
-not approved here. Its `--plan` mode is read-only.
+The 2026-11-12 quarantine action targeted a then-unbound host and a
+hash-pinned module file. That host state is historical and is superseded by
+the live state above; do not apply that restore action against the current
+live stack. The script refuses to overwrite a different file at the target,
+but the `--restore` action is unnecessary and not approved here. Its `--plan`
+mode is read-only.
 
 The exact command and inverse remain in the
 [2026-11-12 historical report](live-host-recheck-2026-11-12.md). Do not
@@ -57,12 +59,14 @@ may autoload it when kernel 7.2.15-300 is booted.
 
 ## Load approval boundary
 
-The latest fresh 7.3.3 build linked, but emitted 5,504 compiler/objtool
-warning lines. The build is not approved for installation or load.
-Do not disable IBT/CET, patch vermagic, alter vendor-core metadata, or load
-the 7.2.15 binder/compute modules on kernel 7.3.3.
+A 3.1.0 module is now installed and live on this host; the stack is running.
+The isolated fresh 7.3.3 build in `musa-data` emitted 5,504 compiler/objtool
+warning lines and is not approved for installation as a replacement. Do not
+install over the live module, and do not disable IBT/CET, patch vermagic,
+alter vendor-core metadata, or load the 7.2.15 binder/compute modules on
+kernel 7.3.3. An unbind/rebind of the live device is not approved.
 
 The gated [`test-gpu.sh`](../scripts/test-gpu.sh) blocks until a full driver
 is bound, initialized, has an S30 render node, and receives explicit test
 approval. It does not load or unload modules. A successful compile, PCI ID,
-device node, or firmware file is not a hardware test.
+device node, or firmware file is not by itself a hardware test.

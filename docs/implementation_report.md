@@ -1,5 +1,9 @@
 # Implementation report
 
+> Historical report. The host snapshots recorded below (2026-11-13 and earlier)
+> are superseded by the [2026-11-17 current state](current-state-2026-11-17.md)
+> and the project [README](../README.md); retained as a dated record.
+
 ## Latest live host recheck (2026-11-13)
 
 The host runs Fedora 45 kernel `7.3.3-300.fc45.x86_64`. The S30 (`1ed5:0102`)

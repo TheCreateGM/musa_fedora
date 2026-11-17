@@ -1,5 +1,9 @@
 # Live host recheck — 2026-11-13
 
+> Historical snapshot (2026-11-13). Superseded by the
+> [2026-11-17 current state](current-state-2026-11-17.md) and the project
+> [README](../README.md); retained as a dated record.
+
 This report records a read-only host recheck and isolated compile/build
 validation. It supersedes the present-tense module-file and quarantine status
 in the [2026-11-12 report](live-host-recheck-2026-11-12.md); earlier actions

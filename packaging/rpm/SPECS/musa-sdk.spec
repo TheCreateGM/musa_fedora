@@ -6,7 +6,7 @@
 
 Name:           musa-sdk
 Version:        5.2.0
-Release:        4%{?dist}
+Release:        6%{?dist}
 Summary:        MUSA compiler toolchain (mcc, mtxas) for Moore Threads GPUs
 
 License:        Proprietary
@@ -17,7 +17,10 @@ BuildArch:      x86_64
 ExclusiveArch:  x86_64
 Requires:       glibc >= 2.34
 Requires:       libstdc++ >= 11
-Requires:       libstdc++-devel
+# gcc-c++ is required to link MUSA programs: the host link resolves -lstdc++
+# through the unversioned libstdc++.so linker symlink, which Fedora ships only
+# in gcc-c++. It pulls libstdc++-devel (the C++ headers, e.g. <cmath>) too.
+Requires:       gcc-c++
 Requires:       zlib
 Requires:       ldconfig
 Recommends:     musa-runtime >= 1.5.4
@@ -71,6 +74,18 @@ printf '/usr/local/musa-5.2/lib\n' > %{buildroot}%{_sysconfdir}/ld.so.conf.d/mus
 %config(noreplace) %{_sysconfdir}/ld.so.conf.d/musa-sdk.conf
 
 %changelog
+* Tue Nov 17 2026 MUSA Fedora Team <musa@fedoraproject.org> - 5.2.0-6
+- Require gcc-c++ instead of libstdc++-devel. Linking a MUSA C++ program
+  needs the unversioned libstdc++.so linker symlink, which Fedora ships only
+  in gcc-c++; without it mcc fails with "cannot find -lstdc++". gcc-c++
+  pulls libstdc++-devel (the C++ standard headers) transitively.
+
+* Tue Nov 17 2026 MUSA Fedora Team <musa@fedoraproject.org> - 5.2.0-5
+- Ship clang-offload-bundler (and clang-offload-wrapper). The mcc driver
+  invokes clang-offload-bundler to bundle the mp_10 device object into the
+  host binary; the previous revision omitted it, so any mcc link failed with
+  "Executable clang-offload-bundler doesn't exist".
+
 * Tue Nov 17 2026 MUSA Fedora Team <musa@fedoraproject.org> - 5.2.0-4
 - Require the C++ standard library headers needed by mcc when compiling MUSA
   C++ sources; a minimal Fedora install otherwise fails to find <cmath>.

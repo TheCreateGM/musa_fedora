@@ -52,8 +52,13 @@ rm -rf "$STAGE/share/doc"
 
 # 2. Keep only the compiler/linker/binutils binaries in bin/. Everything else
 #    (clang-tidy, scan-build drivers, LLVM dev tools) is removed.
+# clang-offload-bundler is invoked directly by the mcc driver (verified with
+# mcc -### on an mp_10 vector-add) to bundle the device object into the host
+# binary; without it mcc fails with "Executable clang-offload-bundler doesn't
+# exist". clang-offload-wrapper is kept alongside it (same offload stage).
 KEEP_BIN=(
     clang clang++ clang-14 ld.lld lld
+    clang-offload-bundler clang-offload-wrapper
     llvm-ar llvm-as llvm-bitcode-strip llvm-cat llvm-config llvm-mc
     llvm-nm llvm-objcopy llvm-objdump llvm-readelf llvm-strip
     mcc mcc_version mtxas
@@ -76,7 +81,7 @@ rm -rf "$STAGE/lib/cmake" "$STAGE/lib/libscanbuild" "$STAGE/lib/libear" \
 find "$STAGE/lib" -maxdepth 1 -xtype l -delete 2>/dev/null || true
 
 # 4. Sanity checks: the essentials of the validated toolchain must be present.
-for f in bin/mcc bin/mtxas bin/clang bin/ld.lld \
+for f in bin/mcc bin/mtxas bin/clang bin/ld.lld bin/clang-offload-bundler \
          lib/libmusart.so lib/libLTO.so lib/libclang-cpp.so \
          mtgpu/bitcode/libdevice.bc include/musa_runtime.h; do
     [[ -e "$STAGE/$f" ]] || {

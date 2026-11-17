@@ -8,6 +8,7 @@ set -uo pipefail
 
 ROOT="$(cd -- "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MUSA_RT_LIB="${MUSA_RT_LIB:-/usr/local/musa/lib}"
+MUSA_RT_INC="${MUSA_RT_INC:-/usr/local/musa/include}"
 MUSA_SDK="${MUSA_SDK:-/usr/local/musa-5.2}"
 SKIP_MEMCPY=0
 while (($#)); do
@@ -104,6 +105,28 @@ elif [[ -x /usr/local/musa/bin/muMemcpyTest ]]; then
     else
         bad "muMemcpyTest failed: $(grep -m1 -i 'error' "$WORK/memcpy.log" || echo 'unknown error')"
     fi
+fi
+
+hdr "MUSA runtime host API (alloc/memcpy/memset/streams)"
+if [[ -f "$ROOT/tests/musart-smoke.c" ]] && [[ -f "$MUSA_RT_INC/musa_runtime.h" ]]; then
+    # Compile against the runtime headers that match the installed library so
+    # musaDeviceProp keeps the correct ABI (1.5.4 is 728 bytes; 5.2.0 is 1032).
+    if gcc -O2 -Wall "$ROOT/tests/musart-smoke.c" -I"$MUSA_RT_INC" \
+        -L"$MUSA_RT_LIB" -lmusart -Wl,-rpath,"$MUSA_RT_LIB" \
+        -o "$WORK/musart-smoke" 2>"$WORK/smoke-cc.log"; then
+        if LD_LIBRARY_PATH="$MUSA_RT_LIB" timeout 60 "$WORK/musart-smoke" >"$WORK/smoke.log" 2>&1; then
+            ok "musart-smoke passed on the GPU"
+            grep -E 'name=|totalGlobalMem=|multiProcessorCount=|d2h_memset_verify=|async_roundtrip=|event_elapsed_ms=|SMOKE_TEST' \
+                "$WORK/smoke.log" | sed 's/^/        /'
+        else
+            bad "musart-smoke ran but failed: $(tail -1 "$WORK/smoke.log")"
+        fi
+    else
+        bad "musart-smoke did not build"
+        head -5 "$WORK/smoke-cc.log" | sed 's/^/        /'
+    fi
+else
+    skip "musart-smoke prerequisites missing ($MUSA_RT_INC/musa_runtime.h or tests/musart-smoke.c)"
 fi
 
 hdr "Compiler + runtime vector-add"

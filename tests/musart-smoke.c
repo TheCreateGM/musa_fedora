@@ -9,9 +9,15 @@
  *
  * MUSA has no musaInit(); the runtime initializes lazily on the first API.
  *
- * Build:  gcc -O2 tests/musart-smoke.c -I/usr/local/musa-5.2/include \
- *             -L/usr/local/musa-5.2/lib -lmusart -o build/musart-smoke
- * Run:    LD_LIBRARY_PATH=/usr/local/musa-5.2/lib build/musart-smoke
+ * The host API must be compiled against the *runtime* headers that match the
+ * installed library: the MTT S30 uses MUSA runtime 1.5.4, whose musaDeviceProp
+ * layout differs from the 5.2.0 SDK headers (728 vs 1032 bytes). Compile and
+ * link against the same version to keep the device-property ABI correct.
+ *
+ * Build:  gcc -O2 tests/musart-smoke.c -I/usr/local/musa/include \
+ *             -L/usr/local/musa/lib -lmusart -Wl,-rpath,/usr/local/musa/lib \
+ *             -o build/musart-smoke
+ * Run:    LD_LIBRARY_PATH=/usr/local/musa/lib build/musart-smoke
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,6 +32,9 @@ MUSART_STAGE_RC(alloc) { return 40; }
 MUSART_STAGE_RC(xfer)  { return 50; }
 MUSART_STAGE_RC(zero)  { return 60; }
 MUSART_STAGE_RC(release) { return 70; }
+MUSART_STAGE_RC(stream) { return 80; }
+MUSART_STAGE_RC(event)  { return 85; }
+MUSART_STAGE_RC(aio)    { return 90; }
 
 #define TRY(call, name)                                                      \
 	do {                                                                 \
@@ -81,6 +90,46 @@ int main(void)
 
 	TRY(musaFreeHost(h), release);
 	TRY(musaFree(d), release);
+
+	/* Stream + event path: async copy and event timing on the device. */
+	musaStream_t stream = NULL;
+	musaEvent_t ev_start = NULL, ev_stop = NULL;
+	float elapsed_ms = -1.0f;
+	float *da = NULL, *ha = NULL;
+	const size_t n2 = 4096, b2 = n2 * sizeof(float);
+
+	TRY(musaStreamCreate(&stream), stream);
+	TRY(musaEventCreate(&ev_start), event);
+	TRY(musaEventCreate(&ev_stop), event);
+	TRY(musaMalloc((void **)&da, b2), alloc);
+	TRY(musaMallocHost((void **)&ha, b2), alloc);
+	for (size_t i = 0; i < n2; i++)
+		ha[i] = (float)(i + 1);
+
+	TRY(musaEventRecord(ev_start, stream), event);
+	TRY(musaMemcpyAsync(da, ha, b2, musaMemcpyHostToDevice, stream), aio);
+	TRY(musaMemcpyAsync(ha, da, b2, musaMemcpyDeviceToHost, stream), aio);
+	TRY(musaEventRecord(ev_stop, stream), event);
+	TRY(musaEventSynchronize(ev_stop), event);
+	TRY(musaStreamSynchronize(stream), stream);
+	TRY(musaEventElapsedTime(&elapsed_ms, ev_start, ev_stop), event);
+
+	int roundtrip = 1;
+	for (size_t i = 0; i < n2; i++)
+		if (ha[i] != (float)(i + 1)) { roundtrip = 0; break; }
+	printf("async_roundtrip=%s\n", roundtrip ? "PASS" : "FAIL");
+	printf("event_elapsed_ms=%.4f\n", elapsed_ms);
+
+	TRY(musaFreeHost(ha), release);
+	TRY(musaFree(da), release);
+	TRY(musaEventDestroy(ev_stop), event);
+	TRY(musaEventDestroy(ev_start), event);
+	TRY(musaStreamDestroy(stream), stream);
+
+	if (!roundtrip) {
+		fprintf(stderr, "FAIL: async round-trip data mismatch\n");
+		return 91;
+	}
 
 	if (!zeros) {
 		fprintf(stderr, "FAIL: D2H data did not match memset pattern\n");

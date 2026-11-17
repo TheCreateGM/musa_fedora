@@ -19,7 +19,7 @@ Intel `i915` GPU still driving the desktop. The earlier
 | `src/`, `inc/`, `Makefile` | S30 driver package 3.1.0 sources and Fedora compatibility port |
 | `driver-mtgpu-5.2.0/` | Separate MUSA 5.2.0 server-driver source/build experiment |
 | `/home/axogm/Documents/project/musa-data/research/` | Vendor core objects, staged packages, build outputs, and other research data |
-| <code>scripts/verify-musa.sh</code> | Read-only readiness report; never loads modules or runs GPU work |
+| <code>scripts/verify-musa.sh</code> | Hardware verification; runs MUSA compute and headless Vulkan checks, but does not load modules or alter system configuration |
 | <code>scripts/test/check-hardware.sh</code> | Read-only PCI, module, and device-node check |
 | <code>scripts/test/run-gpu-tests.sh</code> | Explicitly reports GPU tests as NOT RUN until a usable stack exists |
 | <code>scripts/test-toolchain.sh</code> | Compile-only MUSA compiler and header check; never initializes the runtime |
@@ -35,9 +35,9 @@ module output under `musa-data`; it does not install or load a module:
 
 <pre><code>./scripts/build-kernel-driver.sh "$(uname -r)"</code></pre>
 
-The latest clean 3.1.0 build was produced for kernel 7.3.3 in a fresh
+The latest isolated 3.1.0 build was produced for kernel 7.3.3 in a fresh
 directory under `musa-data/research/builds`. It has matching vermagic and an
-S30 alias but carries 5,504 compiler/objtool warning lines. A 3.1.0 module is
+S30 alias but carries 5,502 compiler/objtool warning lines. A 3.1.0 module is
 installed at
 `/lib/modules/7.3.3-300.fc45.x86_64/extra/mtgpu.ko` and is loaded and live on
 this host; the isolated build artifact in `musa-data` is not what is
@@ -80,10 +80,12 @@ it is unreviewed and does not build into a usable module.
 ## Implementation boundary
 
 A hardware-verified path now exists for device discovery, the vendor copy
-test, the host MUSA runtime API (`tests/musart-smoke.c`), and one `mp_10`
-vector-add kernel (`scripts/verify-musa.sh`: 11 passed, 0 failed, 0 skipped).
-Everything beyond those four checks — OpenCL, OpenGL/Vulkan, video,
-`torch_musa`, and general frameworks — still needs separately validated
-kernel-driver, runtime, compiler, and device-execution layers. Fedora is not a
+test, the host MUSA runtime API, eight `mp_10` compute operations, one
+vector-add, and a headless Vulkan device/buffer/memory probe
+(`scripts/verify-musa.sh`: 13 passed, 0 failed, 1 OpenCL skip) before a later
+archived OpenCL ICD compute probe caused an `mtgpu` kernel Oops. The Moore
+Threads OpenCL ICD is absent from the default loader, and the archived probe
+must not be rerun. Display rendering, OpenGL, video, `torch_musa`,
+and general frameworks still need separate validation. Fedora is not a
 vendor-qualified S30 OS. Installation over the live module and unbind/rebind
 remain unapproved until those layers have been examined for safety.

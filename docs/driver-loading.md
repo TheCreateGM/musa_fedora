@@ -8,12 +8,18 @@ and live (`/sys/module/mtgpu/initstate=live`) from
 `/lib/modules/7.3.3-300.fc45.x86_64/extra/mtgpu.ko`. Both `/dev/mtgpu.0` and
 the S30 DRM render node `/dev/dri/renderD129` are present. IOMMU is enabled
 (`intel_iommu=on iommu=pt`); the S30 is in IOMMU group 11. The Intel UHD 770
-(`i915`) remains the active display GPU; the S30 is compute-only here.
+(`i915`) remains the active display GPU; the S30 does not drive display output.
 
 The vendor `muMemcpyTest` passes, MUSA 1.5.4 `musaInfo` detects one device,
-the host runtime API (`tests/musart-smoke.c`) passes, and a 5.2.0 `mcc`
-`mp_10` vector-add ran on the S30. `scripts/verify-musa.sh` reports **11
-passed, 0 failed, 0 skipped**.
+the host runtime API (`tests/musart-smoke.c`) passes, the `mp_10` vector-add
+and compute suite ran on the S30, and a limited headless Vulkan buffer/memory
+probe passed. `scripts/verify-musa.sh` reports **13 passed, 0 failed, 1
+skipped**; Moore Threads OpenCL is absent.
+
+Those hardware checks were recorded before a separate archived OpenCL ICD
+compute probe caused a kernel Oops in `mtgpu`. The module remained loaded and
+bound, but no more GPU tests were run in that boot. Do not rerun the archived
+ICD probe; see the [current state](current-state-2026-11-17.md).
 
 Because the module is live, do **not** install over it, unbind, or rebind the
 device. An unbind/rebind can fault inside

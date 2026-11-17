@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # uninstall.sh — report installed MUSA components and the safe removal path.
 #
-# This script never removes packages, modules, firmware, SDK files, or
-# libraries, and it never elevates privileges. Actual removal is intentionally
-# disabled because this project has no approved installation manifest on the
-# host (the working stack was installed manually from vendor packages).
+# --status and --plan are read-only. --remove delegates to DNF and removes
+# only the pinned MUSA/MTGPU RPMs. It backs up module/config files and refuses
+# while mtgpu is loaded; it never unloads/rebinds the device or changes boot args.
 #
 # Safe actions:
 #   --status   print the currently installed component manifest
-#   --plan     print what safe removal would look like (no system changes)
+#   --plan     print the guarded package removal plan
+#   --remove   remove installed MUSA/MTGPU RPMs through pkexec
 #   --help     show usage
 #
 # Safe removal reference (run these yourself, with pkexec where elevation is
@@ -35,6 +35,14 @@ FW_DIR="/lib/firmware/mthreads"
 MODPROBE_CONF="/etc/modprobe.d/mtgpu.conf"
 
 have() { [[ -e "$1" ]] && echo "present" || echo "absent"; }
+have_mod() {
+    local base="$1"
+    if [[ -e "$base" || -e "${base}.xz" || -e "${base}.zst" || -e "${base}.gz" ]]; then
+        echo "present"
+    else
+        echo "absent"
+    fi
+}
 
 status_line() {
     printf '  %-38s %s\n' "$1" "$2"
@@ -46,7 +54,7 @@ show_status() {
     echo "PCI / kernel:"
     status_line "MTT S30 (1ed5:0102)" "$(lspci -nn -d 1ed5:0102 >/dev/null 2>&1 && echo detected || echo not-found)"
     status_line "mtgpu module" "$([[ -d /sys/module/mtgpu ]] && echo "loaded ($(cat /sys/module/mtgpu/initstate 2>/dev/null || echo unknown))" || echo not-loaded)"
-    status_line "mtgpu.ko (${MOD_DIR})" "$(have "${MOD_DIR}/mtgpu.ko")"
+    status_line "mtgpu.ko (${MOD_DIR})" "$(have_mod "${MOD_DIR}/mtgpu.ko")"
     status_line "/dev/mtgpu.0" "$(have /dev/mtgpu.0)"
     rnode=""
     for r in /dev/dri/renderD*; do
@@ -75,49 +83,23 @@ show_status() {
     status_line "iommu groups" "$([[ -d /sys/kernel/iommu_groups ]] && ls -A /sys/kernel/iommu_groups 2>/dev/null | wc -l || echo 0) group(s)"
     status_line "kernel cmdline" "$(grep -q 'intel_iommu=on' /proc/cmdline && echo 'intel_iommu=on iommu=pt present' || echo missing)"
     echo
-    echo "UNINSTALL_STATUS: BLOCKED (no system changes made by this script)"
+    echo "UNINSTALL_STATUS: REPORT_ONLY (no system changes made by --status)"
 }
 
 show_plan() {
-    echo "=== Safe removal plan (no system changes) ==="
+    echo "=== Guarded Fedora RPM removal plan ==="
     echo
-    echo "WARNING: removing the driver while the S30 is in use can hang or fault the"
-    echo "kernel. Stop all MUSA workloads first. Historically, unbind/rebind of this"
-    echo "vendor module caused a kernel NULL dereference — do not unbind/rebind as a"
-    echo "routine test. See docs/root-cause-rebind-2026-11-16.md."
+    echo "Remove command: scripts/uninstall.sh --remove"
+    echo "The package helper backs up module/config files under /var/backups/musa-fedora,"
+    echo "then uses DNF with --no-autoremove to remove only the five stack RPMs."
+    echo "It refuses while mtgpu is loaded and never unloads or rebinds the device."
+    echo "IOMMU boot arguments and user data are left unchanged."
     echo
-    echo "1. Stop MUSA workloads and confirm nothing holds /dev/mtgpu.0 or renderD129."
+    echo "The active host has mtgpu loaded, so removal is currently refused."
+    echo "Use only after a vendor-approved maintenance boot with the module unloaded."
+    echo "Reinstall the same Fedora RPM set to recover."
     echo
-    echo "2. Unload the module (only if idle; requires pkexec):"
-    echo "   pkexec modprobe -r mtgpu"
-    echo "   # If this fails or hangs, do not force it; reboot instead."
-    echo
-    echo "3. Remove the module file and module metadata (pkexec):"
-    echo "   pkexec rm -f ${MOD_DIR}/mtgpu.ko"
-    echo "   pkexec depmod -a ${KVER}"
-    echo
-    echo "4. Remove modprobe config (pkexec):"
-    echo "   pkexec rm -f ${MODPROBE_CONF}"
-    echo
-    echo "5. Remove userspace runtime 1.5.4 (pkexec):"
-    echo "   pkexec rm -rf ${RT_DIR}"
-    echo "   pkexec ldconfig"
-    echo
-    echo "6. Remove SDK/compiler 5.2.0 (pkexec):"
-    echo "   pkexec rm -rf ${SDK_DIR}"
-    echo "   pkexec ldconfig"
-    echo
-    echo "7. Remove firmware (pkexec):"
-    echo "   pkexec rm -rf ${FW_DIR}"
-    echo
-    echo "8. (Optional) remove IOMMU kernel args and reboot (pkexec):"
-    echo "   ${PROJECT_DIR}/scripts/disable-iommu.sh   # removes intel_iommu=on iommu=pt"
-    echo "   pkexec reboot"
-    echo
-    echo "Recovery: restore from backups of mtgpu.ko and the BLS boot entry."
-    echo "See docs/current-state-2026-11-17.md and INSTALL.md."
-    echo
-    echo "UNINSTALL_STATUS: BLOCKED (plan only; nothing removed)"
+    echo "UNINSTALL_STATUS: PLAN_ONLY"
 }
 
 case "${1:-}" in
@@ -138,6 +120,10 @@ packages). Follow the plan manually, using pkexec where elevation is required,
 and keep backups for recovery.
 EOF
         exit 0
+        ;;
+    --remove)
+        shift
+        exec "$PROJECT_DIR/scripts/rpm-stack.sh" remove "$@"
         ;;
     --status)
         show_status

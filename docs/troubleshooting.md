@@ -3,19 +3,25 @@
 Current facts and logs are in the
 [current state](current-state-2026-11-17.md).
 
-## Read-only host check
+## Recorded host verification
 
-Run:
+The command below performs real GPU work. The recorded run is historical for
+the current boot; do not execute it again in the boot that logged the Oops.
+Resume validation after recovery and a clean boot, with the test scope reviewed.
 
 ```sh
 ./scripts/verify-musa.sh
 ```
 
-On this host the S30 is bound and the `mtgpu` 3.1.0 module is live, so the
-verifier reports **11 passed, 0 failed, 0 skipped** and exits 0. A non-zero
-exit status (previously 3) indicates the S30 is unbound or an MTGPU module is
-not fully initialized. The verifier reads PCI/sysfs and device-node metadata;
-it does not open the GPU node or initialize the MUSA runtime.
+The recorded verifier run completed with **13 passed, 0 failed, 1 skipped**
+before a separate archived OpenCL ICD compute probe triggered a kernel Oops in
+`mtgpu`. The verifier runs real MUSA compute and Vulkan device/memory checks;
+it is not read-only with respect to GPU execution. Do not run GPU tests again
+in the boot that logged the Oops. The S30 module remained loaded and bound,
+but that status does not establish driver health. See the [failure record](current-state-2026-11-17.md)
+and the [reviewed clean-boot resume plan](clean-boot-resume-plan-2026-11-17.md).
+The gate `scripts/test-gpu.sh` refuses to run when the current boot already
+logged an `mtgpu` fault.
 
 ## Driver and module state
 

@@ -22,6 +22,20 @@ if [[ ! -r "$CONFIG_FILE" ]] || ! grep -q '^CONFIG_X86_KERNEL_IBT=y$' "$CONFIG_F
     BLOCKERS+=("active kernel configuration does not establish CONFIG_X86_KERNEL_IBT=y")
 fi
 
+# Do not run GPU workloads in a boot that already logged an mtgpu kernel fault.
+# A fault leaves the driver in an unknown state even though the module may
+# still report initstate=live and answer status queries.
+FAULT_RE='BUG: kernel NULL pointer dereference|Oops:|general protection fault|kernel BUG at|invalid opcode'
+if command -v journalctl >/dev/null 2>&1; then
+    if BOOTLOG="$(journalctl -k -b 0 --no-pager 2>/dev/null)"; then
+        if grep -qE "$FAULT_RE" <<<"$BOOTLOG" && grep -q '\[mtgpu\]' <<<"$BOOTLOG"; then
+            BLOCKERS+=("this boot logged an mtgpu kernel fault (Oops/BUG); reboot before GPU tests")
+        fi
+    else
+        BLOCKERS+=("cannot read the kernel journal to confirm a clean boot (journalctl -k -b 0 failed)")
+    fi
+fi
+
 if [[ ! -r "$DEVICE/vendor" || ! -r "$DEVICE/device" ]] ||
    [[ "$(cat "$DEVICE/vendor" 2>/dev/null || true)" != "0x1ed5" ]] ||
    [[ "$(cat "$DEVICE/device" 2>/dev/null || true)" != "0x0102" ]]; then

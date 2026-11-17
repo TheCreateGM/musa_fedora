@@ -201,14 +201,17 @@ The source recognizes the S30 PCI ID, and compile/link builds exist for
 kernels 7.2.15 and 7.3.3. On this host the vendor `mtgpu` 3.1.0 driver is now
 installed and live with the S30 bound, and hardware results confirm execution:
 runtime 1.5.4 detects the device, the vendor `muMemcpyTest` passes, the host
-runtime API (`tests/musart-smoke.c`) passes, and a 5.2.0 `mcc` `mp_10`
-vector-add ran on the S30 (`scripts/verify-musa.sh`: 11 passed, 0 failed, 0
-skipped). Official architecture materials support <code>mp_10</code> as the
-S30 code-generation target. The public documentation still does not qualify
-Fedora 45 + Intel + S30, so the stack is verified on this host but not
-vendor-qualified. The isolated 3.1.0 build in `musa-data` still reports
-compiler/objtool warnings and is not approved for installation as a
-replacement for the live module.
+runtime API (`tests/musart-smoke.c`) passes, the `mp_10` vector-add and compute
+suite run on the S30, and a limited headless Vulkan device/buffer/memory probe
+passes (`scripts/verify-musa.sh`: 13 passed, 0 failed, 1 OpenCL skip). No MT
+OpenCL ICD is installed. A separately staged legacy ICD's compute probe
+triggered a kernel Oops in `mtgpu`; see the [current failure record](current-state-2026-11-17.md)
+and do not rerun it. Official architecture materials support
+<code>mp_10</code> as the S30 code-generation target. The public documentation
+still does not qualify Fedora 45 + Intel + S30, so the stack is verified on
+this host but not vendor-qualified. The isolated 3.1.0 build in `musa-data`
+still reports compiler/objtool warnings and is not approved for installation
+as a replacement for the live module.
 
 Static inspection of the staged official 5.2.0 core archive found mixed IBT
 metadata: 412 of 413 ELF members advertise IBT, while `mt-rm.o`—the member

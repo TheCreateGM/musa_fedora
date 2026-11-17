@@ -12,10 +12,13 @@ reviewed on 2026-11-12.
   render node `/dev/dri/renderD129` are present.
 - IOMMU is enabled (`intel_iommu=on iommu=pt`); the S30 is in IOMMU group 11.
 - The Intel UHD Graphics 770 (`i915`) remains the active display GPU; the S30
-  is compute-only here.
+  does not drive display output. A limited headless Vulkan device/buffer/memory
+  path passes.
 - MUSA runtime 1.5.4 detects the S30 (`musaInfo`), the vendor `muMemcpyTest`
-  passes, the host runtime API passes (`tests/musart-smoke.c`), and a 5.2.0
-  `mcc` `mp_10` vector-add ran on the S30.
+  passes, the host runtime API passes (`tests/musart-smoke.c`), the 5.2.0
+  `mcc` `mp_10` vector-add and compute suite ran on the S30, and a headless
+  Vulkan device/buffer/memory probe passed before the later OpenCL kernel Oops
+  recorded in the [current state](current-state-2026-11-17.md).
 
 ## Vendor support boundary
 
@@ -61,10 +64,12 @@ Fedora.
   `mp_21`–`mp_32` fat binary and explicit `mp_10` output, and went on to
   build `tests/musa-vector-add.mu` for `mp_10`, which ran on the S30
   (`PASS: 1048576 float adds verified on S30`).
-- The read-only verifier (`scripts/verify-musa.sh`) reports **11 passed, 0
-  failed, 0 skipped**. The vendor `muMemcpyTest` passes, MUSA 1.5.4
-  `musaInfo` detects one device, and the host runtime API
-  (`tests/musart-smoke.c`) passes on the S30.
+- The verifier (`scripts/verify-musa.sh`) reports **13 passed, 0 failed, 1
+  skipped**. The skip is Moore Threads OpenCL; the loader sees MVGAL and Intel
+  platforms, but no MT ICD. The eight `mp_10` compute checks and the limited
+  headless Vulkan buffer/memory probe passed on the S30 before the separate
+  archived OpenCL ICD compute probe caused an `mtgpu` kernel Oops. Do not rerun
+  that probe; see the failure record in the current state.
 - The older observation that `musaInfo` returned error 100, “no MUSA-capable
   device is detected,” applied while the S30 was unbound; it is no longer the
   current state.
@@ -73,10 +78,13 @@ Fedora.
 
 The S30 PCI ID is recognized by vendor source, the vendor `mtgpu` 3.1.0
 driver is live on Fedora 45 + kernel 7.3.3, and a hardware-verified MUSA path
-exists (device discovery, vendor copy test, host runtime API, and one `mp_10`
-vector-add kernel). This covers only those four checks; OpenCL, OpenGL/Vulkan,
-video, `torch_musa`, and general frameworks are not tested or claimed. Fedora
-is not a vendor-qualified S30 OS, so the stack is verified on this host but
-not vendor-qualified. Do not disable IBT/CET, modify vendor-core metadata, or
-load another MTGPU module. Broader features and an S30-qualified
-driver/runtime matrix are needed before extending the claim.
+exists (device discovery, vendor copy test, host runtime API, eight compute
+operations, vector-add, and a limited headless Vulkan path) from before the
+archived OpenCL experiment caused a kernel Oops. Moore Threads OpenCL is
+unavailable in the default loader, and the archived ICD must not be used. This
+does not validate display rendering, OpenGL, video, `torch_musa`, or general frameworks.
+Fedora is not a
+vendor-qualified S30 OS, so the stack is verified on this host but not
+vendor-qualified. Do not disable IBT/CET, modify vendor-core metadata, or load
+another MTGPU module. Broader features and an S30-qualified driver/runtime
+matrix are needed before extending the claim.

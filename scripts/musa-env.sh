@@ -40,7 +40,9 @@ if [[ "${MUSA_USE_STAGING:-0}" == "1" ]]; then
     done
 
     MUSA_INCLUDE_PATH="$_MUSA_MUSART_DEV_HOME/include"
+    MUSA_HOST_INCLUDE_PATH="$_MUSA_MUSART_DEV_HOME/include"
     MUSA_COMPILER_INCLUDE="$MUSA_HOME/include"
+    MUSA_RUNTIME_HOME="$_MUSA_MUSART_HOME"
     MUSA_RT_LIB_PATH="$_MUSA_LINK_LIB"
     PATH="$MUSA_HOME/bin:$_MUSA_MUSART_HOME/bin:$_MUSA_MTXAS_HOME/bin:$_MUSA_EXTRACTED/libmthreads-compute_5.2.0_amd64/usr/bin:$PATH"
 
@@ -49,11 +51,21 @@ if [[ "${MUSA_USE_STAGING:-0}" == "1" ]]; then
     _MUSA_NEW_LIB_PATH="$_MUSA_MUSART_HOME/lib:$MUSA_HOME/lib:$_MUSA_COMPUTE_LIB:$_MUSA_DRM_LIB"
 else
     MUSA_HOME="${MUSA_HOME:-${MUSA_PATH:-/usr/local/musa-5.2}}"
+    MUSA_RUNTIME_HOME="${MUSA_RUNTIME_HOME:-/usr/local/musa}"
     MUSA_INCLUDE_PATH="${MUSA_INCLUDE_PATH:-$MUSA_HOME/include}"
+    MUSA_HOST_INCLUDE_PATH="${MUSA_HOST_INCLUDE_PATH:-$MUSA_RUNTIME_HOME/include}"
     MUSA_COMPILER_INCLUDE="${MUSA_COMPILER_INCLUDE:-$MUSA_HOME/include}"
-    MUSA_RT_LIB_PATH="${MUSA_RT_LIB_PATH:-$MUSA_HOME/lib}"
+    MUSA_RT_LIB_PATH="${MUSA_RT_LIB_PATH:-$MUSA_RUNTIME_HOME/lib}"
     PATH="$MUSA_HOME/bin:$PATH"
-    _MUSA_NEW_LIB_PATH="$MUSA_HOME/lib"
+    # The supported S30 runtime (1.5.4) and compiler (5.2.0) live in separate
+    # prefixes. Put the compatible runtime first: /etc/profile.d/musa.sh may
+    # have added the 5.2 runtime ahead of it, which can crash the 1.5.4 tools.
+    if [[ ! -d "$MUSA_RT_LIB_PATH" ]]; then
+        printf 'MUSA compatibility runtime library directory not found: %s\n' \
+            "$MUSA_RT_LIB_PATH" >&2
+        return 1
+    fi
+    _MUSA_NEW_LIB_PATH="$MUSA_RT_LIB_PATH:$MUSA_HOME/lib"
 fi
 
 MUSA_PATH="$MUSA_HOME"
@@ -64,7 +76,8 @@ else
     LD_LIBRARY_PATH="$_MUSA_NEW_LIB_PATH"
 fi
 
-export MUSA_HOME MUSA_PATH MUSA_INCLUDE_PATH MUSA_COMPILER_INCLUDE
+export MUSA_HOME MUSA_PATH MUSA_RUNTIME_HOME MUSA_INCLUDE_PATH
+export MUSA_HOST_INCLUDE_PATH MUSA_COMPILER_INCLUDE
 export MUSA_RT_LIB_PATH MUSA_MCC PATH LD_LIBRARY_PATH
 
 unset _MUSA_SCRIPT_DIR _MUSA_PROJECT_DIR _MUSA_DATA_DIR _MUSA_EXTRACTED

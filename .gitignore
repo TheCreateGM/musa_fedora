@@ -92,3 +92,12 @@ __pycache__/
 venv/
 cmake-build-*/
 *.cache
+
+# Generated GPU/API smoke-test binaries
+/tests/musa-vector-add
+/tests/musart-smoke
+/tests/musa-compute
+/tests/musa-fp64
+/tests/vulkan-enumerate
+/tests/opencl-platforms
+/tests/opencl-s30-smoke

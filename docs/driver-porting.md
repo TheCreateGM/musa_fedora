@@ -14,7 +14,7 @@ and the S30 PCI alias, emitting 5,504 compiler/objtool warning lines; that
 isolated artifact is not approved for installation as a replacement. A 3.1.0
 module is now installed at
 `/lib/modules/7.3.3-300.fc45.x86_64/extra/mtgpu.ko` and is loaded and live on
-this host, with the S30 bound and the four hardware tests passing (see the
+this host, with the S30 bound and the expanded compute/Vulkan tests passing (see the
 [current state](current-state-2026-11-17.md)). Do not install over the live
 module or unbind/rebind the device; the opaque vendor core still carries
 objtool/ENDBR warnings, so do not disable IBT/CET.

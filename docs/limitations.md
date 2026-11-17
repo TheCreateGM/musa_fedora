@@ -11,20 +11,31 @@ loaded and reports `initstate=live`; `/dev/mtgpu.0` and the S30 DRM render node
 (`intel_iommu=on iommu=pt`). MUSA runtime 1.5.4 `musaInfo` detects one device,
 the vendor `muMemcpyTest` passes, the host runtime-API test
 (`tests/musart-smoke.c`) passes, and a MUSA 5.2.0 `mcc` `mp_10` vector-add ran
-on the S30 with all 1,048,576 results verified. `scripts/verify-musa.sh`
-reports 11 passed, 0 failed, 0 skipped.
+on the S30 with all 1,048,576 results verified. The `mp_10` compute suite
+passed SAXPY, shared reduction, atomics, constant memory, device math, 2D
+launch, D2D copy, and FP64 checks. A headless Vulkan probe created the S30
+device and queue, allocated a buffer, and mapped/read back host-visible memory.
+The recorded `scripts/verify-musa.sh` run reports 13 passed, 0 failed, 1
+skipped; the skip is Moore Threads OpenCL because no MT ICD is present in the
+default loader configuration. A later experiment with an archived MobiMaliang
+2.1.1 ICD triggered a kernel Oops in `PVRSRVRGXFlushComputeDataKM` during an
+OpenCL compute request. Do not install or rerun that ICD/probe; see the
+[current state and failure record](current-state-2026-11-17.md).
 
-The desktop still runs on Intel UHD Graphics 770 (`i915`); the S30 is
-compute-only here with no display output configured.
+The desktop still runs on Intel UHD Graphics 770 (`i915`); the S30 does not
+drive display output here. Only a headless Vulkan device/buffer/memory path
+was exercised.
 
 ## What is not verified or supported
 
-Only device discovery, the vendor copy test, the host runtime API, and one
-`mp_10` vector-add kernel are hardware-verified. OpenCL, OpenGL/OpenGL
-ES/Vulkan graphics, hardware video encode/decode, `torch_musa`, and other
-frameworks or libraries are not tested and are not claimed. Moore Threads
+The listed MUSA compute operations and limited headless Vulkan
+device/buffer/memory path passed before the OpenCL Oops described above.
+Moore Threads OpenCL is unavailable: no MT ICD is installed in the default
+loader, and the archived 2.1.1 ICD caused a kernel Oops on this driver. OpenGL,
+display rendering/presentation, hardware video encode/decode, `torch_musa`,
+and other frameworks or libraries are not tested or claimed. Moore Threads
 lists OpenCL parallel compute and graphics as S30 capabilities; that
-specification does not establish a working stack on this Fedora installation.
+specification does not establish those features on this Fedora installation.
 The vendor feature claims and project validation state are separated in
 [supported features](supported-features.md).
 
@@ -59,8 +70,11 @@ and global alias were hash-verified and quarantined under `musa-data`.
 | Vendor `muMemcpyTest` | Verified |
 | Host runtime API (`musart-smoke`) | Verified |
 | MUSA 5.2.0 `mcc` `mp_10` vector-add | Verified; ran on the S30 |
+| MUSA compute suite: SAXPY, reduction, atomics, constant, math, 2D grid, D2D, FP64 | Verified; all host-checked results passed |
+| Headless Vulkan device, queue, buffer, host-visible map/readback | Verified; display output and rendering not tested |
+| Moore Threads OpenCL platform | Unavailable; no system MT ICD; archived ICD compute probe caused kernel Oops |
 | Fedora RPM set install + packaged `mcc` on the S30 | Verified; isolated Fedora 45 container, 13 checks passed |
-| Other MUSA features, graphics, video, `torch_musa` | Not tested or established |
+| OpenGL, display rendering, video, `torch_musa`, other frameworks | Not tested or established |
 | Vendor-qualified Fedora 45 + S30 stack | Not established |
 | Incomplete project PCI binder | Reversibly quarantined from 7.2.15-300; its global alias is removed |
 

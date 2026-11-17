@@ -13,8 +13,11 @@ This table lists only evidence-backed facts. The current host baseline is the
 | Vendor copy test | Verified | `muMemcpyTest` passes |
 | Host runtime API | Verified | `tests/musart-smoke.c` passes on the S30 |
 | S30 code-generation target | Verified on hardware | MUSA 5.2.0 `mcc` `mp_10` vector-add ran; 1,048,576 adds verified |
-| End-to-end check | Verified | `scripts/verify-musa.sh`: 11 passed, 0 failed |
-| OpenCL, graphics, video, `torch_musa` | Not tested or claimed | Not exercised on this host |
+| MUSA compute operations | Verified on hardware | SAXPY, shared reduction, atomics, constant memory, device math, 2D grid, D2D copy, and FP64 passed |
+| Headless Vulkan | Verified, limited | S30 ICD enumerates device/queue and creates/maps a buffer; no rendering or presentation tested |
+| Moore Threads OpenCL | Unavailable; archived ICD compute probe unsafe | Default loader sees MVGAL and Intel only; archived MobiMaliang 2.1.1 ICD compute probe triggered an `mtgpu` kernel Oops; see [current state](current-state-2026-11-17.md) |
+| End-to-end check | Verified | `scripts/verify-musa.sh`: 13 passed, 0 failed, 1 skipped |
+| OpenGL, video, `torch_musa`, other frameworks | Not tested or claimed | Not exercised on this host |
 | Vendor-qualified Fedora 45 + S30 stack | Not established | Public catalog lists S5000, not S30 or Fedora |
 
 The staged official MUSA 5.2.0 DKMS source also recognizes the S30 PCI ID by
@@ -41,3 +44,8 @@ target. A successful compiler run or source PCI table is not by itself
 evidence of hardware support. The earlier CPU emulator and CPU-only tests are
 archived under `/home/axogm/Documents/project/musa-data/research/`; they do not
 execute MUSA device code.
+
+The archived MobiMaliang 2.1.1 OpenCL ICD is not a supported workaround: its
+compute probe caused a kernel Oops on this host's `mtgpu` 3.1.0 driver. Do not
+install or run that archived probe. The default OpenCL loader currently has no
+Moore Threads ICD installed.

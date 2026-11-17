@@ -7,13 +7,15 @@ production code in `/home/axogm/Documents/project/musa-fedora` and reference
 packages, vendor source, SDK extracts, dependencies, and research outputs in
 `/home/axogm/Documents/project/musa-data`.
 
-A hardware-verified MUSA path now exists on the MTT S30: driver `mtgpu` 3.1.0
-is loaded and live, runtime 1.5.4 detects the device and passes the vendor copy
-test, and the 5.2.0 `mcc` compiler produced an `mp_10` vector-add kernel that
-ran on the S30. This covers device discovery, the vendor copy test, the host
-runtime API, and one vector-add kernel only; it does not validate other
-libraries, frameworks, graphics, or video. PCI discovery or a successful
-compile alone is still not hardware validation.
+Hardware checks recorded before the later OpenCL kernel Oops verified an MUSA
+path on the MTT S30: driver `mtgpu` 3.1.0 was loaded and live, runtime 1.5.4
+detected the device and passed the vendor copy test, and the 5.2.0 `mcc`
+compiler produced `mp_10` vector-add and compute tests that ran on the S30. A
+headless Vulkan device/buffer/memory test also passed. The system has no Moore
+Threads OpenCL ICD, and an archived 2.1.1 ICD compute probe triggered the
+Oops. These checks validate only the exercised operations; they do not
+establish display rendering, video, framework, or general library support.
+PCI discovery or a successful compile alone is still not hardware validation.
 
 ## Live host status — 2026-11-17
 
@@ -21,7 +23,8 @@ compile alone is still not hardware validation.
 - Intel Core i5-13500 and Intel UHD Graphics 770 (`i915`), which drives the
   desktop.
 - MTT S30 at `0000:01:00.0`, PCI `1ed5:0102`, 4 GiB; vendor audio function
-  `1ed5:01ff`. The desktop stays on Intel `i915`; the S30 is compute-only here.
+  `1ed5:01ff`. The desktop stays on Intel `i915`; the S30 does not drive
+  display output, though a headless Vulkan device/memory path passed.
 - `mtgpu` driver 3.1.0 is loaded and live (`initstate=live`); module
   `/lib/modules/7.3.3-300.fc45.x86_64/extra/mtgpu.ko`, vermagic
   `7.3.3-300.fc45.x86_64`. `/dev/mtgpu.0` and the S30 DRM render node
@@ -36,13 +39,28 @@ compile alone is still not hardware validation.
   and it ran on the S30: `PASS: 1048576 float adds verified on S30`.
 - `tests/musart-smoke.c` (host runtime API: device count, properties,
   alloc/free, H2D+D2H copies, memset, streams, events) passed on the S30.
-- `scripts/verify-musa.sh`: **11 passed, 0 failed, 0 skipped**.
+- The recorded `scripts/verify-musa.sh` run: **13 passed, 0 failed, 1
+  skipped** (no Moore Threads OpenCL ICD); it completed before a later legacy
+  OpenCL ICD experiment triggered an `mtgpu` kernel Oops. Do not run more GPU
+  tests in this boot; see `docs/current-state-2026-11-17.md`.
+- MUSA compute checks on `mp_10`: SAXPY, shared reduction, integer atomics,
+  constant memory, device math, 2D grid, device-to-device copy, and FP64 passed.
+- Headless Vulkan S30 device creation, buffer allocation, and host-visible
+  mapping passed; no rendering or display output was tested.
 - Supported combination: driver `mtgpu` 3.1.0 + MUSA runtime 1.5.4 + MUSA 5.2.0
   compiler targeting `mp_10`. The separate 5.2.0 *runtime* is not compatible
   with the 3.1.0 driver ABI and must not be substituted for 1.5.4.
 
 See [current-state-2026-11-17.md](docs/current-state-2026-11-17.md) for the
 full record.
+
+The current boot logged an `mtgpu` kernel fault (a NULL-pointer dereference in
+the PVR/DDK compute bridge, `PVRSRVRGXFlushComputeDataKM`) during the archived
+OpenCL experiment, so no further GPU workload runs in this boot. The reviewed
+procedure to resume hardware validation after a clean reboot is in
+[clean-boot-resume-plan-2026-11-17.md](docs/clean-boot-resume-plan-2026-11-17.md).
+The GPU gate `scripts/test-gpu.sh` now also refuses to run when the current
+boot already logged an `mtgpu` fault.
 
 ## Historical live host status — 2026-11-13 (superseded)
 
@@ -81,7 +99,7 @@ earlier quarantine action.
 | Fedora kernel port | Isolated 3.1.0 `mtgpu.ko` links for kernel 7.3.3 | Historical build artifact had 5,504 compiler/objtool warning lines; the vendor-loaded module is live |
 | MUSA compiler | Product filing maps S30 to SuDi; architecture docs map SuDi to `MP_10`; 5.2.0 compiler emits `mp_10` | Verified on the S30: the `mp_10` vector-add ran |
 | Runtime | MUSA 1.5.4 `musaInfo`, `muMemcpyTest`, `musart-smoke` | Verified |
-| Physical GPU | S30 discovery, allocation, host/device transfer, vector-add kernel | Verified for these tests only |
+| Physical GPU | Runtime API, vector-add, eight compute operations, headless Vulkan device/buffer/memory | Verified for these tests only |
 | SDK support | Official 5.2.0 catalog lists S5000 packages, not S30; S30 docs do not list Fedora | Fedora 45 + S30 not vendor-qualified |
 
 Official source, packages, package hashes, and compiler extracts are under
@@ -118,7 +136,10 @@ Evidence is recorded in
    1.5.4 `musaInfo` and `muMemcpyTest` pass, and the `mcc` `mp_10` vector-add
    ran on the GPU.
 10. Added `tests/musart-smoke.c` and showed the host runtime API passes on the
-    S30; `scripts/verify-musa.sh` now reports 11 passed, 0 failed.
+   S30; the expanded `scripts/verify-musa.sh` reports 13 passed, 0 failed,
+   and 1 skip for the unavailable Moore Threads OpenCL ICD. A subsequent
+   archived ICD compute probe triggered a kernel Oops; that probe is disabled
+   and no more GPU tests were run in this boot.
 11. Built five Fedora RPM specs (`mtgpu-dkms` 3.1.0-5, `mtgpu-firmware`
     3.1.0-2, `musa-runtime` 1.5.4-3, `musa-sdk` 5.2.0-6 compiler-only,
     `musa-toolkit` 3.1.0-1) targeting the working stack.
@@ -142,10 +163,13 @@ separate recovery plan.
 
 ### 2. Broader feature and framework support
 
-Only device discovery, the vendor copy test, the host runtime API, and one
-`mp_10` vector-add kernel are hardware-verified. OpenCL, OpenGL/Vulkan, video,
-`torch_musa`, and general frameworks are neither tested nor claimed. The public
-SDK catalog does not list S30 or Fedora.
+Before the later OpenCL Oops, device discovery, the vendor copy test, host
+runtime APIs, eight `mp_10` compute operations, one vector-add, and a headless
+Vulkan buffer/memory path were hardware-verified. The system has no Moore
+Threads OpenCL ICD; the archived 2.1.1 ICD compute probe triggered an `mtgpu`
+kernel Oops and must not be rerun. Display rendering, video, `torch_musa`, and
+general frameworks remain untested. The public SDK catalog does not list S30
+or Fedora.
 
 ### 3. Vendor qualification
 
@@ -162,7 +186,8 @@ Do not disable IBT/CET.
 ## Safe commands
 
 ```sh
-# End-to-end status check; 11 passed, 0 failed on this host
+# GPU test suite: do not run in the boot that logged the OpenCL kernel Oops.
+# Recorded pre-Oops result: 13 passed, 0 failed, 1 OpenCL skip.
 ./scripts/verify-musa.sh
 
 # Compile-only MUSA compiler/header check; does not run the executable

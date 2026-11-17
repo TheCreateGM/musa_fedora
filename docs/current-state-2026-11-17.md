@@ -18,8 +18,12 @@ were not exercised.
   `/dev/dri/renderD129` are present.
 - IOMMU groups are present and the S30 is assigned to a group. The host's
   active command line enables Intel IOMMU passthrough.
-- No MUSA or MTGPU RPM is installed on the host. This session did not install,
-  load, unload, replace, or rebind any kernel module or change boot settings.
+- RPM queries show the Fedora set installed: mtgpu-dkms 3.1.0-5,
+  mtgpu-firmware 3.1.0-2, musa-runtime 1.5.4-3, musa-sdk 5.2.0-6, and
+  musa-toolkit 3.1.0-1. The active module is at
+  /lib/modules/7.3.3-300.fc45.x86_64/extra/mtgpu.ko.xz; DKMS reports 3.1.0
+  installed. This recheck did not change packages, load/unload/replace/rebind
+  a module, or change boot settings.
 
 ## Verified MUSA path on the physical S30
 
@@ -34,19 +38,32 @@ Command: `bash scripts/verify-musa.sh`.
 | Vendor `muMemcpyTest` | Passed |
 | MUSA runtime host API (`tests/musart-smoke.c`) | Passed on the S30; alloc/free, H2D+D2H copies, memset, streams, events |
 | MUSA 5.2.0 `mcc`, `mp_10` vector-add | Passed; 1,048,576 results verified on the S30 |
-| Overall | **11 passed, 0 failed, 0 skipped** |
+| MUSA compute suite | Passed; SAXPY, shared reduction, atomics, constant memory, device math, 2D grid, D2D copy, FP64 |
+| Headless Vulkan | Passed; S30 device/queue creation, buffer allocation, host-visible map/readback |
+| Moore Threads OpenCL | No MT platform/ICD detected; only MVGAL and Intel platforms reported |
+| Overall | **13 passed, 0 failed, 1 skipped** |
 
 The working combination exercised was the installed MUSA 1.5.4 runtime with
-the MUSA 5.2.0 compiler targeting `mp_10`. This verifies device discovery,
-the vendor copy test, the host runtime API, and this vector-add only. It does
-not validate other libraries, frameworks, graphics, video, audio, or general
-workload support.
+the MUSA 5.2.0 compiler targeting `mp_10`. The compute suite exercised the
+operations listed above. The Vulkan probe stopped at device/queue creation and
+buffer allocation/mapping; it did not render or present a frame. The OpenCL
+check found no Moore Threads platform in the default system loader, so that
+item was skipped. A separate experiment with an archived MobiMaliang 2.1.1
+OpenCL ICD did enumerate a platform inconsistently, then triggered a kernel
+Oops in `mtgpu` during an OpenCL compute request. The failure is detailed
+below. Do not rerun that ICD or OpenCL compute probe. Other libraries,
+frameworks, video, audio, display output, and general workload support remain
+unvalidated.
 The desktop remains on Intel graphics.
 
-The shell currently defaults `LD_LIBRARY_PATH` to `/usr/local/musa-5.2/lib`.
-The successful verifier deliberately selects `/usr/local/musa/lib` (runtime
-1.5.4). A direct probe using the separate 5.2.0 runtime failed on this host;
-do not replace the validated 1.5.4 runtime with it.
+The unowned `/etc/profile.d/musa.sh` sets `LD_LIBRARY_PATH` to
+`/usr/local/musa-5.2/lib`. During this recheck, launching the installed
+1.5.4 `musaInfo` with that default environment aborted in its driver-library
+initialization. Pinning `/usr/local/musa/lib` (runtime 1.5.4) first made
+`musaInfo` succeed, including when the SDK library directory remained later
+in the search path. `source scripts/musa-env.sh` now sets that safe ordering
+for interactive use. No system profile or loader configuration was changed.
+Do not replace the validated 1.5.4 runtime with the separate 5.2.0 runtime.
 
 ## Fedora RPM and Copr results
 
@@ -138,12 +155,73 @@ default staging directory exceeds its per-user quota.
 - Do not unbind/rebind or replace the active module as a routine test. A
   previous rebind attempt caused a kernel fault; see
   [`root-cause-rebind-2026-11-16.md`](root-cause-rebind-2026-11-16.md).
-- Host installation remains untested and is not needed to reproduce the
-  container package test. Do not install the RPM stack over the working host
-  environment without a separate recovery plan.
+- The five RPMs are installed on the host, as verified with RPM queries;
+  this recheck did not run an RPM transaction. Do not update or remove DKMS
+  packages while the live mtgpu module is loaded. Back up the on-disk module
+  before any later package transaction and retain the current recovery plan.
 - The physical-host end-to-end test passed using the existing 1.5.4 runtime
   and 5.2.0 compiler, and the isolated container install plus real-GPU rerun of
   the current five-RPM set (SDK 5.2.0-6) passes end to end: 13 checks, 0
   failures. The container gate exercises the packaged `mcc` on the S30 as a
-  fully installed set; it still does not validate graphics, video, or
-  frameworks.
+  fully installed set; it does not validate display rendering/presentation,
+  video, or frameworks.
+
+### Follow-up revalidation on 2026-11-17
+
+- `scripts/test-toolchain.sh` passed its compile-only checks for the staged
+  official 5.2.0 compiler, including explicit `mp_10` generation and runtime
+  header syntax. It did not execute the generated binary.
+- `scripts/build-kernel-driver.sh 7.3.3-300.fc45.x86_64` linked a fresh
+  27 MiB module in
+  `/home/axogm/Documents/project/musa-data/research/builds/mtgpu-7.3.3-300.fc45.x86_64-670BVq/`.
+  Vermagic and the S30 PCI alias matched. The build emitted 5,502 compiler/
+  objtool warning lines; the artifact was not installed or loaded and is not
+  approved as a replacement for the live module.
+- A fresh `scripts/verify-musa.sh` run passed 13 checks with 0 failures and
+  skipped only Moore Threads OpenCL because no MT OpenCL ICD is installed.
+- Sourcing `scripts/musa-env.sh` placed `/usr/local/musa/lib` (runtime 1.5.4)
+  before the SDK libraries; `musaInfo` then detected the S30. No global
+  profile, loader, boot, package, or kernel-module configuration was changed.
+
+### Legacy OpenCL experiment and kernel Oops
+
+After the verification run above, an isolated experiment used the archived
+MobiMaliang 2.1.1 desktop ICD with the active `mtgpu` 3.1.0 module. The ICD
+platform enumeration was inconsistent. Its compute smoke test triggered a
+kernel Oops at `2026-11-17 16:18:38 +08:00` in process `opencl-s30-smok`, in
+`PVRSRVRGXFlushComputeDataKM` while handling a DRM ioctl; the fault was a
+supervisor write to address `0x1` in `mutex_lock`. The trace is archived at
+`/home/axogm/Documents/project/musa-data/research/builds/opencl-mobi-2.1.1-on-mtgpu-3.1.0-2026-11-17/kernel-oops.log`.
+
+The test process was stopped. Afterwards the module remained loaded and bound,
+and `mthreads-gmi` plus the MUSA 1.5.4 `musaInfo` query still detected the S30.
+Those status queries do not establish that the driver is unaffected. The
+exact userspace call in flight is unknown; an old userspace/current-driver ABI
+mismatch is plausible but unproven. Do not install the archived ICD or repeat
+the compute probe. No module reload, unbind/rebind, package, boot, or system
+OpenCL configuration change was made. No more GPU tests were run after the
+Oops in this boot. See the archived experiment report in the same research
+directory.
+
+The kernel journal for this boot records a `BUG: kernel NULL pointer
+dereference` (`Oops: 0002 [#1]`) at 16:18:38 reached via
+`PVRSRVRGXFlushComputeDataKM` / `PVRSRVBridgeRGXFlushComputeData` /
+`BridgedDispatchKM` in `mtgpu`, preceded at 16:18:36 by a trace through
+`PhysmemNewLocalRamBackedPMR` / `PVRSRVBridgePhysmemNewRamBackedPMR`. After the
+fault, `mtgpu 0000:01:00.0: irq:NNN affinity has changed.` messages continued.
+The pre-reboot host snapshot is at
+`musa-data/host-backups/pre-clean-boot-reboot-20261117-162913/` (live module
+SHA-256 `21a3764b…01adad5`).
+
+### Resume plan and gate
+
+Resuming GPU validation requires a clean boot. The reviewed procedure is in
+[clean-boot-resume-plan-2026-11-17.md](clean-boot-resume-plan-2026-11-17.md):
+reboot the default `7.3.3-300.fc45` kernel (no boot-argument changes), run the
+read-only pre-flight, then the gated smoke test and the full suite. The gate
+[`scripts/test-gpu.sh`](../scripts/test-gpu.sh) now also reports
+`GPU_TEST_STATUS: NOT RUN` with `this boot logged an mtgpu kernel fault` when
+the running boot already logged an `mtgpu` `BUG`/`Oops`, so the suite cannot be
+launched from a degraded boot by accident. The reboot is low risk for the
+desktop (i915 drives display) and the S30 VGA function autoloads `mtgpu` via
+`modules.alias` (`pci:v00001ED5d00000102…mtgpu`).

@@ -150,5 +150,52 @@ else
     bad "mcc or tests/musa-vector-add.mu missing"
 fi
 
+hdr "Compute features (mp_10)"
+if [[ -x "$MUSA_SDK/bin/mcc" ]] && [[ -f "$ROOT/tests/musa-compute.mu" ]]; then
+    if bash "$ROOT/scripts/test-compute.sh" >"$WORK/compute.log" 2>&1; then
+        ok "saxpy, shared reduce, atomics, constant memory, libm, 2D grid, D2D, fp64"
+        grep -E '^(COMPUTE |fp64_|FP64_|TEST_COMPUTE_)' "$WORK/compute.log" | sed 's/^/        /'
+    else
+        bad "compute suite failed"
+        grep -E 'FAIL|error:|BUILD_FAIL|RUN_FAIL' "$WORK/compute.log" | head -20 | sed 's/^/        /'
+    fi
+else
+    bad "mcc or tests/musa-compute.mu missing"
+fi
+
+hdr "Vulkan (headless ICD)"
+ICD="${MUSA_VK_ICD:-/etc/vulkan/icd.d/musaicdconf.json}"
+if [[ -f "$ICD" ]] && gcc -O2 -Wall "$ROOT/tests/vulkan-enumerate.c" -ldl -o "$WORK/vk-enum" 2>"$WORK/vk-cc.log"; then
+    if VK_DRIVER_FILES="$ICD" VK_ICD_FILENAMES="$ICD" timeout 30 "$WORK/vk-enum" >"$WORK/vk.log" 2>&1; then
+        ok "MTT S30 Vulkan device, buffer, and host-visible map"
+        grep -E 'device0 |queue_family|vkCreateDevice=|VULKAN_' "$WORK/vk.log" | sed 's/^/        /'
+    else
+        bad "Vulkan probe failed: $(tail -1 "$WORK/vk.log")"
+    fi
+else
+    bad "Vulkan probe did not build or ICD missing ($ICD)"
+    head -5 "$WORK/vk-cc.log" 2>/dev/null | sed 's/^/        /'
+fi
+
+hdr "OpenCL"
+if [[ -f /usr/include/CL/cl.h ]] && [[ -e /usr/lib64/libOpenCL.so.1 ]] &&
+   gcc -O2 -Wall "$ROOT/tests/opencl-platforms.c" /usr/lib64/libOpenCL.so.1 \
+       -o "$WORK/cl-plat" 2>"$WORK/cl-cc.log"; then
+    if timeout 30 "$WORK/cl-plat" >"$WORK/cl.log" 2>&1; then
+        sed 's/^/        /' "$WORK/cl.log"
+        if grep -q 'OPENCL_MT: PRESENT' "$WORK/cl.log"; then
+            ok "Moore Threads OpenCL platform is installed"
+        elif grep -q 'OPENCL_MT: ABSENT' "$WORK/cl.log"; then
+            skip "no Moore Threads OpenCL ICD in this runtime (other platforms only)"
+        else
+            bad "OpenCL probe output was not recognized"
+        fi
+    else
+        bad "OpenCL probe failed"
+    fi
+else
+    skip "OpenCL headers or libOpenCL.so.1 not installed"
+fi
+
 printf '\n\033[1mSummary:\033[0m %d passed, %d failed, %d skipped\n' "$pass" "$fail" "$skipped"
 [[ "$fail" -eq 0 ]]

@@ -65,6 +65,7 @@ sudo sysctl --system          # vm.max_map_count=0x7fffffff
 Kernels are built with the MUSA 5.2.0 `mcc`:
 
 ```sh
+source scripts/musa-env.sh
 mcc -O2 --offload-arch=mp_10 \
     -I/usr/local/musa-5.2/include \
     -L/usr/local/musa/lib -lmusart -Wl,-rpath,/usr/local/musa/lib \
@@ -73,6 +74,10 @@ mcc -O2 --offload-arch=mp_10 \
 
 `mp_10` is the S30 (SuDi) target. The 5.2 **runtime** must not be used with the
 3.1.0 driver (missing `MKT_NAME` ioctl), only the 1.5.4 runtime.
+The environment script keeps the 5.2.0 compiler path while placing the
+compatible 1.5.4 runtime first in `LD_LIBRARY_PATH`. For host API code, use
+headers from `/usr/local/musa/include`; the SDK's 5.2.0
+`musaDeviceProp` layout is not ABI-compatible with the runtime 1.5.4 header.
 
 ## 5. Verify
 

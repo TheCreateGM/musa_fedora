@@ -76,7 +76,9 @@ static const struct drm_plane_funcs dummy_plane_funcs = {
 	.update_plane		= drm_atomic_helper_update_plane,
 	.disable_plane		= drm_atomic_helper_disable_plane,
 	.destroy		= dummy_plane_destroy,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(7, 4, 0)
 	.reset			= drm_atomic_helper_plane_reset,
+#endif
 	.atomic_duplicate_state = drm_atomic_helper_plane_duplicate_state,
 	.atomic_destroy_state	= drm_atomic_helper_plane_destroy_state,
 };
@@ -231,7 +233,9 @@ static const struct drm_crtc_funcs dummy_crtc_funcs = {
 	.set_config             = drm_atomic_helper_set_config,
 	.destroy                = dummy_crtc_destroy,
 	.page_flip              = drm_atomic_helper_page_flip,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(7, 4, 0)
 	.reset                  = drm_atomic_helper_crtc_reset,
+#endif
 	.atomic_duplicate_state = drm_atomic_helper_crtc_duplicate_state,
 	.atomic_destroy_state   = drm_atomic_helper_crtc_destroy_state,
 	.enable_vblank		= dummy_enable_vblank,

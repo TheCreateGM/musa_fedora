@@ -22,7 +22,8 @@ The project targets the vendor's own S30 stack — **mtgpu driver 3.1.0** plus
 | GPU memcpy test | **verified** | vendor `muMemcpyTest` exited successfully |
 | Compiler target | **verified** | MUSA 5.2.0 `mcc` compiled `mp_10` vector-add |
 | GPU kernel execution | **verified** | vector-add completed; all 1,048,576 results matched |
-| Fedora RPM/Copr release | **not ready** | current specs package 5.2.0, not the verified 3.1.0/1.5.4 stack; local SDK RPM integrity check fails |
+| Fedora RPM/Copr builds | **built** | current package releases succeeded in Fedora 44, Fedora 45, ELN, and Rawhide chroots; see [current status](docs/current-state-2026-11-17.md) |
+| Isolated RPM install | **partially verified** | Fedora 45 installed the Copr packages and runtime discovery passed; the latest SDK dependency fix still needs an isolated reinstall/compile run |
 
 Verification command on 2026-11-17: `scripts/verify-musa.sh` — **10 passed, 0 failed**.
 The execution test used the installed 1.5.4 runtime and 5.2.0 compiler. This
@@ -65,12 +66,16 @@ repeat it after driver, runtime, or kernel changes.
 * The verified host uses the vendor mtgpu 3.1.0 stack and MUSA runtime 1.5.4;
   MUSA 5.2.0 is used only for its compiler/headers. The 5.2 runtime is not
   compatible with this 3.1.0 driver ABI; do not substitute it for runtime 1.5.4.
-* `packaging/rpm/SPECS` and the published Copr builds currently target MUSA
-  5.2.0. The 5.2.0 driver source package omits the vendor core object, so it is
-  not a complete installable driver. Successful Copr compilation is not proof
-  of a functioning S30 driver/runtime stack.
-* The local staged `musa-sdk-5.2.0` RPM currently fails `rpm -K` integrity
-  verification. Treat local staged RPMs as untrusted until rebuilt and verified.
+* The current Copr package set is `mtgpu-dkms` 3.1.0-5,
+  `mtgpu-firmware` 3.1.0-2, `musa-runtime` 1.5.4-3, `musa-sdk` 5.2.0-4, and
+  `musa-toolkit` 3.1.0-1. All five builds succeeded in Fedora 44, Fedora 45,
+  ELN, and Rawhide chroots. The runtime and SDK specs now avoid a Fedora 45
+  dependency failure and declare the standard C++ headers needed by `mcc`.
+* The package set was installed in an isolated Fedora 45 container with
+  scriptlets suppressed. Packaged `musaInfo` detected the passed-through S30.
+  SDK release 3 lacked the C++ header dependency, so the container compile
+  failed; release 4 fixes the dependency and builds in Copr, but has not yet
+  been reinstalled and rerun in the container.
 * The 3.1.0 runtime headers are incomplete for compiling; use the 5.2.0 SDK
   compiler/headers while linking to the installed 1.5.4 runtime. Keep test code
   within the API exported by `libmusart.so.1.5.4`.
@@ -83,8 +88,8 @@ repeat it after driver, runtime, or kernel changes.
 
 * The recorded tests are read-only apart from temporary files and do not install
   packages, change boot settings, or load/unload/rebind kernel modules.
-* Do not install the experimental 5.2.0 DKMS package over the active driver.
-  Driver/runtime packaging must be reconciled and tested in an isolated build
-  environment before deployment.
+* Do not install a new DKMS package over the active driver as part of routine
+  testing. The isolated package test suppresses scriptlets and does not build,
+  load, or replace a kernel module.
 * Reference packages, extracts, and system backups are kept under
   `/home/axogm/Documents/project/musa-data/`.

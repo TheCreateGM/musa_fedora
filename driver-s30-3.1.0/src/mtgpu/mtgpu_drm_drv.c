@@ -41,7 +41,11 @@
 #if defined(OS_DRM_DRM_PROBE_HELPER_H_EXIST)
 #include <drm/drm_probe_helper.h>
 #endif
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 4, 0)
+#include <drm/clients/drm_fbdev_helper.h>
+#else
 #include <drm/drm_fb_helper.h>
+#endif
 #if defined(OS_DRM_DRM_FBDEV_GENERIC_H_EXIST)
 #include <drm/drm_fbdev_generic.h>
 #endif

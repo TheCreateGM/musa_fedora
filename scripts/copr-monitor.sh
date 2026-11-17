@@ -4,7 +4,7 @@
 #        [--builds ID1,ID2,...] [--interval SECONDS]
 set -euo pipefail
 
-PROJECT="axogm/musa-mtt-s30"
+PROJECT="axogm/musa-fedora"
 BUILDS_CSV=""
 INTERVAL=30
 

@@ -2,7 +2,7 @@
 
 Name:           mtgpu-dkms
 Version:        3.1.0
-Release:        3%{?dist}
+Release:        5%{?dist}
 Summary:        DKMS kernel driver source for Moore Threads GPUs (mtgpu)
 
 License:        GPL-2.0-only
@@ -25,6 +25,7 @@ BuildRequires:  gcc
 BuildRequires:  make
 BuildRequires:  elfutils-libelf-devel
 BuildRequires:  openssl-devel
+BuildRequires:  kmod
 
 %description
 The mtgpu-dkms package installs the Moore Threads mtgpu kernel driver source
@@ -127,6 +128,26 @@ fi
 depmod -a >/dev/null 2>&1 || :
 
 %changelog
+* Tue Nov 17 2026 MUSA Fedora Team <musa@fedoraproject.org> - 3.1.0-5
+- Use the DRM fbdev helper's new public header path on Linux 7.4 and newer.
+  Upstream moved the helper into the DRM client library and renamed its header
+  to drm/clients/drm_fbdev_helper.h; retain drm/drm_fb_helper.h on older
+  kernels. Fedora 44 and 45 already build with release 4, while ELN/rawhide
+  release 4 builds stopped at the removed header.
+
+* Tue Nov 17 2026 MUSA Fedora Team <musa@fedoraproject.org> - 3.1.0-4
+- Add kmod to BuildRequires: the %build compile check calls modinfo, which is
+  not present in the minimal build chroot. Without it the -3 build failed with
+  "modinfo: command not found" on every chroot, even though the module itself
+  compiled and linked successfully.
+- Handle the Linux 7.4 DRM reset-hook removal: drm_plane_funcs/drm_crtc_funcs
+  lost their .reset member and drm_atomic_helper_plane_reset()/
+  drm_atomic_helper_crtc_reset() were removed. Guard the four plane/crtc
+  .reset initializers with LINUX_VERSION_CODE < KERNEL_VERSION(7, 4, 0) so the
+  driver compiles on Fedora rawhide/ELN (7.4-rc) while keeping the validated
+  7.3 path (Fedora 44/45) unchanged. Connector reset is untouched (still
+  present on 7.4).
+
 * Tue Nov 17 2026 MUSA Fedora Team <musa@fedoraproject.org> - 3.1.0-3
 - Fix the chroot compile check: Fedora kernel-devel installs the kernel tree
   under /usr/src/kernels; /lib/modules/<ver>/build only exists once a kernel

@@ -6,7 +6,7 @@
 
 Name:           musa-runtime
 Version:        1.5.4
-Release:        2%{?dist}
+Release:        3%{?dist}
 Summary:        MUSA runtime userspace for Moore Threads GPUs (MTT S30)
 
 License:        Proprietary
@@ -20,7 +20,6 @@ BuildArch:      x86_64
 Requires:       glibc >= 2.34
 Requires:       libstdc++
 Requires:       libdrm >= 2.4.110
-Requires:       mesa-libglapi
 Requires:       zlib
 Requires:       ldconfig
 Requires:       linux-firmware
@@ -118,6 +117,11 @@ sysctl --system >/dev/null 2>&1 || true
 %config(noreplace) %{_sysconfdir}/ld.so.conf.d/musa-runtime.conf
 
 %changelog
+* Tue Nov 17 2026 MUSA Fedora Team <musa@fedoraproject.org> - 1.5.4-3
+- Drop the obsolete mesa-libglapi package requirement. Fedora 44 and newer
+  no longer publish that subpackage, and this runtime ships its own
+  libglapi_musa.so.0 implementation.
+
 * Tue Nov 17 2026 MUSA Fedora Team <musa@fedoraproject.org> - 1.5.4-2
 - Map the vendor payload onto Fedora paths (/usr/lib64, /usr/lib64/dri,
   /usr/lib64/gbm, /usr/lib64/xorg/modules/drivers) instead of the Ubuntu

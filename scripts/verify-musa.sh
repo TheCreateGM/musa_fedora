@@ -2,19 +2,31 @@
 # verify-musa.sh — end-to-end status check for the MTT S30 MUSA stack.
 #
 # Read-only except for creating a temporary build directory under $TMPDIR.
-# Prints one line per layer with PASS/FAIL, and never claims a layer works
+# Prints PASS/FAIL (or an explicit SKIP), and never claims a layer works
 # unless the underlying command actually succeeded.
 set -uo pipefail
 
 ROOT="$(cd -- "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MUSA_RT_LIB="${MUSA_RT_LIB:-/usr/local/musa/lib}"
 MUSA_SDK="${MUSA_SDK:-/usr/local/musa-5.2}"
+SKIP_MEMCPY=0
+while (($#)); do
+    case "$1" in
+        --skip-memcpy) SKIP_MEMCPY=1; shift ;;
+        -h|--help)
+            printf 'Usage: %s [--skip-memcpy]\n' "${0##*/}"
+            printf '  --skip-memcpy  Skip the vendor copy test (useful with a tight memory limit).\n'
+            exit 0 ;;
+        *) printf 'Unknown option: %s\n' "$1" >&2; exit 2 ;;
+    esac
+done
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/musa-verify.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 
-pass=0; fail=0
+pass=0; fail=0; skipped=0
 ok()   { printf '  \033[32mPASS\033[0m  %s\n' "$*"; pass=$((pass+1)); }
 bad()  { printf '  \033[31mFAIL\033[0m  %s\n' "$*"; fail=$((fail+1)); }
+skip() { printf '  \033[33mSKIP\033[0m  %s\n' "$*"; skipped=$((skipped+1)); }
 info() { printf '        %s\n' "$*"; }
 hdr()  { printf '\n\033[1m== %s ==\033[0m\n' "$*"; }
 
@@ -51,8 +63,12 @@ else
 fi
 
 hdr "Vendor management tool (mthreads-gmi)"
-if [[ -x /usr/local/musa/bin/mthreads-gmi ]]; then
-    if out=$(LD_LIBRARY_PATH="$MUSA_RT_LIB" timeout 30 /usr/local/musa/bin/mthreads-gmi 2>&1); then
+GMI_BIN=""
+for candidate in /usr/bin/mthreads-gmi /usr/local/musa/bin/mthreads-gmi; do
+    if [[ -x "$candidate" ]]; then GMI_BIN="$candidate"; break; fi
+done
+if [[ -n "$GMI_BIN" ]]; then
+    if out=$(LD_LIBRARY_PATH="$MUSA_RT_LIB" timeout 30 "$GMI_BIN" 2>&1); then
         if grep -q 'MTT S30' <<<"$out"; then
             ok "mthreads-gmi reports the MTT S30"
             grep -E 'Driver Version|MTT S30' <<<"$out" | sed 's/^/        /' | head -4
@@ -80,7 +96,9 @@ if [[ -x /usr/local/musa/bin/musaInfo ]]; then
 fi
 
 hdr "Vendor memcpy self-test"
-if [[ -x /usr/local/musa/bin/muMemcpyTest ]]; then
+if ((SKIP_MEMCPY)); then
+    skip "muMemcpyTest skipped by request"
+elif [[ -x /usr/local/musa/bin/muMemcpyTest ]]; then
     if LD_LIBRARY_PATH="$MUSA_RT_LIB" timeout 60 /usr/local/musa/bin/muMemcpyTest >"$WORK/memcpy.log" 2>&1; then
         ok "muMemcpyTest succeeded"
     else
@@ -109,5 +127,5 @@ else
     bad "mcc or tests/musa-vector-add.mu missing"
 fi
 
-printf '\n\033[1mSummary:\033[0m %d passed, %d failed\n' "$pass" "$fail"
+printf '\n\033[1mSummary:\033[0m %d passed, %d failed, %d skipped\n' "$pass" "$fail" "$skipped"
 [[ "$fail" -eq 0 ]]

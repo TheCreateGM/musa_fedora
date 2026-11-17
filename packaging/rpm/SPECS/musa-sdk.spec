@@ -6,7 +6,7 @@
 
 Name:           musa-sdk
 Version:        5.2.0
-Release:        3%{?dist}
+Release:        4%{?dist}
 Summary:        MUSA compiler toolchain (mcc, mtxas) for Moore Threads GPUs
 
 License:        Proprietary
@@ -17,6 +17,7 @@ BuildArch:      x86_64
 ExclusiveArch:  x86_64
 Requires:       glibc >= 2.34
 Requires:       libstdc++ >= 11
+Requires:       libstdc++-devel
 Requires:       zlib
 Requires:       ldconfig
 Recommends:     musa-runtime >= 1.5.4
@@ -70,6 +71,10 @@ printf '/usr/local/musa-5.2/lib\n' > %{buildroot}%{_sysconfdir}/ld.so.conf.d/mus
 %config(noreplace) %{_sysconfdir}/ld.so.conf.d/musa-sdk.conf
 
 %changelog
+* Tue Nov 17 2026 MUSA Fedora Team <musa@fedoraproject.org> - 5.2.0-4
+- Require the C++ standard library headers needed by mcc when compiling MUSA
+  C++ sources; a minimal Fedora install otherwise fails to find <cmath>.
+
 * Tue Nov 17 2026 MUSA Fedora Team <musa@fedoraproject.org> - 5.2.0-3
 - Ship the linker configuration with the package instead of relying on a
   hand-written host file.

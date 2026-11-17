@@ -18,7 +18,11 @@
 #include <drm/drm_framebuffer.h>
 #include <drm/drm_plane.h>
 #include <drm/drm_fourcc.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 4, 0)
+#include <drm/clients/drm_fbdev_helper.h>
+#else
 #include <drm/drm_fb_helper.h>
+#endif
 
 #include "mtgpu_drm_gem.h"
 #include "mtgpu_drm_drv.h"

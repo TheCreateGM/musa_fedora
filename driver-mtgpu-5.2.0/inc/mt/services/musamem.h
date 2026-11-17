@@ -1,0 +1,87 @@
+/*************************************************************************/ /*!
+@File
+@Title          MUSA memory context management
+@Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
+@Description    Header for MUSA memory context management
+@License        Dual MIT/GPLv2
+
+The contents of this file are subject to the MIT license as set out below.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+Alternatively, the contents of this file may be used under the terms of
+the GNU General Public License Version 2 ("GPL") in which case the provisions
+of GPL are applicable instead of those above.
+
+If you wish to allow use of your version of this file only under the terms of
+GPL, and not to allow others to use your version of this file under the terms
+of the MIT license, indicate your decision by deleting the provisions above
+and replace them with the notice and other provisions required by GPL as set
+out in the file called "GPL-COPYING" included in this distribution. If you do
+not delete the provisions above, a recipient may use your version of this file
+under the terms of either the MIT license or GPL.
+
+This License is also included in this distribution in the file called
+"MIT-COPYING".
+
+EXCEPT AS OTHERWISE STATED IN A NEGOTIATED AGREEMENT: (A) THE SOFTWARE IS
+PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING
+BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+PURPOSE AND NONINFRINGEMENT; AND (B) IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/ /**************************************************************************/
+
+#if !defined(MUSAMEM_H)
+#define MUSAMEM_H
+
+#include "mtgpu_error.h"
+#include "device.h"
+#include "mmu_common.h"
+#include "musadevice.h"
+
+#define MUSAMEM_SERVER_MMU_CONTEXT_MAX_NAME 16
+
+/* this PID denotes the firmware */
+#define MUSAMEM_SERVER_PID_FIRMWARE 0xFFFFFFFF
+
+/* this PID denotes the PM */
+#define MUSAMEM_SERVER_PID_PM 0xEFFFFFFF
+
+typedef struct _MUSAMEM_PROCESS_INFO_
+{
+	MT_PID uiPID;
+	MT_CHAR szProcessName[MUSAMEM_SERVER_MMU_CONTEXT_MAX_NAME];
+	MT_BOOL bUnregistered;
+} MUSAMEM_PROCESS_INFO;
+
+typedef struct SERVER_MMU_CONTEXT_TAG SERVER_MMU_CONTEXT;
+
+void MUSAMMUCacheInvalidate(MTGPU_DEVICE_NODE *psDevNode,
+						   MMU_CONTEXT *psMMUContext,
+						   MMU_LEVEL eMMULevel,
+						   MT_BOOL bUnmap);
+
+MTGPU_ERROR MUSAGetMMUContextPCBaseAddr(SERVER_MMU_CONTEXT *psServerMMUContext, MT_DEV_PHYADDR *psPCBaseAddr);
+
+void MUSAUnregisterMemoryContext(MT_HANDLE hPrivData);
+MTGPU_ERROR MUSARegisterMemoryContext(MTGPU_DEVICE_NODE		*psDevNode,
+				      MMU_CONTEXT			*psMMUContext,
+				      MT_HANDLE			*hPrivData);
+
+MT_UINT64 MUSAVGPUGPAToHPA(MTGPU_DEVICE_NODE *psDeviceNode, MT_UINT64 ui64GPA);
+
+DEVMEMINT_CTX *MTGPUMMUContextGetDevmemCtx(struct SERVER_MMU_CONTEXT_TAG *psServerMMUCtx);
+void MTGPUMMUContextSetDevmemCtx(struct SERVER_MMU_CONTEXT_TAG *psServerMMUCtx,
+				  DEVMEMINT_CTX *psDevmemCtx);
+
+#endif /* MUSAMEM_H */

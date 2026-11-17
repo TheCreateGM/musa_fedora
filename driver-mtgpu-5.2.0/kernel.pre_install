@@ -1,0 +1,24 @@
+#!/bin/bash
+
+# module name and version
+MODULE_NAME="mtgpu"
+
+# dkms status
+DKMS_STATUS=$(sudo dkms status)
+
+# mtgpu dkms packages path
+SOURCE_DIR="/usr/src/"
+
+# traverse all mtgpu dkms folders
+for dir in "$SOURCE_DIR"mtgpu-*; do
+  if [ -d "$dir" ]; then
+    # extract the version 
+    version=$(basename "$dir" | sed 's/^mtgpu-//')
+
+    if ! echo "$DKMS_STATUS" | grep -q "^${MODULE_NAME}/${version}\s*"; then
+	    # add mtgpu to DKMS tree
+	    echo "Adding module ${MODULE_NAME}/${version} to DKMS..."
+	    sudo dkms add -m $MODULE_NAME -v $version
+    fi
+  fi
+done

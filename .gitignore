@@ -101,3 +101,6 @@ cmake-build-*/
 /tests/vulkan-enumerate
 /tests/opencl-platforms
 /tests/opencl-s30-smoke
+
+# RPM signing revocation material (keep private)
+*.rev

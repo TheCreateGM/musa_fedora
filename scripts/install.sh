@@ -11,17 +11,8 @@
 #   --install  install the validated local Fedora RPM set through pkexec
 #   --help     show usage
 #
-# Manual install reference (run these yourself, with pkexec where elevation is
-# required — never as part of this script):
-#   1. scripts/enable-iommu.sh (grubby: intel_iommu=on iommu=pt) then reboot
-#   2. extract musa_3.1.0-pc_x86.deb and copy userspace to /usr/local/musa,
-#      then ldconfig + sysctl --system (vm.max_map_count=0x7fffffff)
-#   3. install mtgpu.ko into /lib/modules/$(uname -r)/extra/ and run depmod
-#   4. write /etc/modprobe.d/mtgpu.conf with `options mtgpu mtgpu_drm_major=2`
-#   5. scripts/verify-musa.sh
-#
-# Recovery: keep a backup of the working mtgpu.ko and BLS boot entry before any
-# change; see docs/current-state-2026-11-17.md and INSTALL.md.
+# Driver replacement/removal and boot-argument changes require a reviewed
+# maintenance window; see INSTALL.md for the package-managed workflow/recovery.
 set -euo pipefail
 
 PROJECT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

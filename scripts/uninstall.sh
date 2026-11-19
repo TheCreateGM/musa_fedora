@@ -11,19 +11,9 @@
 #   --remove   remove installed MUSA/MTGPU RPMs through pkexec
 #   --help     show usage
 #
-# Safe removal reference (run these yourself, with pkexec where elevation is
-# required — never as part of this script). Remove in reverse dependency order:
-#   1. unload mtgpu only if nothing is using the S30 (pkexec modprobe -r mtgpu)
-#      — historically unsafe on this host: do NOT unbind/rebind as a routine
-#      test; see docs/root-cause-rebind-2026-11-16.md
-#   2. pkexec rm /lib/modules/$(uname -r)/extra/mtgpu.ko && pkexec depmod -a
-#   3. pkexec rm /etc/modprobe.d/mtgpu.conf
-#   4. remove /usr/local/musa and /usr/local/musa-5.2 contents, then pkexec ldconfig
-#   5. remove /lib/firmware/mthreads/* (pkexec)
-#   6. remove intel_iommu=on iommu=pt from grubby (pkexec) and reboot if desired
-#
-# Recovery: keep a backup of the working mtgpu.ko and BLS boot entry before
-# removal; see docs/current-state-2026-11-17.md and INSTALL.md.
+# --remove delegates to scripts/rpm-stack.sh. It refuses while mtgpu is loaded,
+# backs up the module/configuration, and removes only the Fedora RPM set.
+# Do not manually rmmod, unbind/rebind, or delete module files on this host.
 set -euo pipefail
 
 PROJECT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -105,19 +95,16 @@ show_plan() {
 case "${1:-}" in
     --help|-h)
         cat <<'EOF'
-Usage: scripts/uninstall.sh [--status|--plan|--help]
-
-Reports the installed MUSA component manifest and the safe removal plan.
-This script makes no system changes and never elevates privileges.
+Usage: scripts/uninstall.sh [--status|--plan|--remove|--help]
 
   --status  Print the currently installed component manifest.
   --plan    Print what safe removal would look like (no system changes).
+  --remove  Remove only the MUSA/MTGPU RPMs through DNF and pkexec.
   --help    Show this help.
 
-Actual removal is blocked because this project has no approved installation
-manifest on the host (the working stack was installed manually from vendor
-packages). Follow the plan manually, using pkexec where elevation is required,
-and keep backups for recovery.
+Removal backs up the module/configuration and refuses while mtgpu is loaded.
+It does not unload/rebind the device, edit boot arguments, or remove unrelated
+packages.
 EOF
         exit 0
         ;;

@@ -4,11 +4,51 @@ The MTT S30 on this host already has the vendor **driver 3.1.0** loaded and the
 matching **MUSA runtime 1.5.4** installed. This document describes how to
 reproduce that state and how to enable the required IOMMU.
 
+## Package-managed install and removal
+
+The validated Fedora RPMs are built from this tree under
+packaging/rpm/local-build/RPMS. Build them on the target Fedora release with:
+
+```sh
+TMPDIR=/var/tmp packaging/rpm/build-all.sh
+```
+
+Review the package selection before using the package manager:
+
+```sh
+scripts/install.sh --status
+scripts/install.sh --plan
+scripts/install.sh --install
+```
+
+The installer verifies the exact package versions and RPM digests, makes a
+backup under /var/backups/musa-fedora, and uses DNF through pkexec. It refuses
+to change the driver package while mtgpu is loaded. It installs the DKMS
+module but does not load or replace a live module and does not edit boot
+arguments. A module load or reboot must be handled in a reviewed maintenance
+window.
+
+Removal uses the matching package workflow:
+
+```sh
+scripts/uninstall.sh --plan
+scripts/uninstall.sh --remove
+```
+
+The removal helper backs up the active-kernel module and MUSA configuration,
+uses DNF with --no-autoremove, and refuses while mtgpu is loaded. It leaves
+IOMMU boot arguments, user data, and unrelated packages unchanged. Do not use
+manual rm, modprobe -r, or file-copy commands to replace/remove the live module.
+
+The five RPMs are already installed on this host and the module is live. The
+install action therefore reports ALREADY_INSTALLED without an RPM transaction.
+
+
 ## 1. Enable the IOMMU (required for any MUSA runtime call)
 
 ```sh
-sudo scripts/enable-iommu.sh     # grubby: intel_iommu=on iommu=pt
-sudo reboot
+scripts/enable-iommu.sh         # invokes pkexec and backs up BLS entries
+pkexec /usr/bin/systemctl reboot
 ```
 
 Verify after reboot:
@@ -22,43 +62,29 @@ ls /sys/kernel/iommu_groups | wc -l          # must be > 0
 
 ## 2. Driver
 
+The package-managed install helper installs the mtgpu 3.1.0 DKMS source and
+vendor core object. The DKMS package builds for the running kernel and checks
+that the module has matching vermagic and the S30 PCI ID. The standalone
+builder remains useful for isolated investigation:
+
 ```sh
-scripts/build-kernel-driver.sh               # builds against the running kernel
+scripts/build-kernel-driver.sh
 ```
 
-The script copies the driver source to `musa-data`, verifies the pinned SHA-256
-of the closed vendor core object (`mtgpu_core.o_binary`), builds out-of-tree, and
-verifies `vermagic`. It does **not** install or load anything.
+It copies source into musa-data, verifies the pinned vendor-core SHA-256, builds
+out of tree, and writes the build/logs under musa-data. It does not install or
+load the resulting module. Do not copy a build artifact over the loaded driver.
 
-Install the resulting `mtgpu.ko` into `/lib/modules/$(uname -r)/extra/` and run
-`depmod`, or package it with `packaging/rpm/SPECS/mtgpu-dkms.spec`.
-
-Kernel options: `/etc/modprobe.d/mtgpu.conf` should contain only the vendor
-default
-
-```
-options mtgpu mtgpu_drm_major=2
-```
-
-Do **not** set `rm_feature_level=1` (non-default RM mode) unless you are
-deliberately testing it.
+The IOMMU is already enabled on the current host. On another host, the reversible
+enable/disable scripts use pkexec and preserve the active BLS entries. Reboot
+only after reviewing the boot-argument change.
 
 ## 3. Userspace runtime
 
-Install `musa_3.1.0-pc_x86.deb` from
-`musa-data/research/official-musa-3.1.0-s30/` by extracting it, not by running
-the Debian maintainer scripts:
-
-```sh
-dpkg-deb -x musa_3.1.0-pc_x86.deb /tmp/musa-pkg
-sudo cp -a /tmp/musa-pkg/usr/local/musa/lib/.   /usr/local/musa/lib/
-sudo cp -a /tmp/musa-pkg/usr/local/musa/include/. /usr/local/musa/include/
-sudo cp -a /tmp/musa-pkg/usr/local/musa/bin/.   /usr/local/musa/bin/
-sudo cp -a /tmp/musa-pkg/usr/lib/x86_64-linux-gnu/. /usr/lib64/
-sudo cp -a /tmp/musa-pkg/etc/sysctl.d/99-musa.conf /etc/sysctl.d/
-sudo ldconfig
-sudo sysctl --system          # vm.max_map_count=0x7fffffff
-```
+The Fedora musa-runtime and musa-sdk RPMs install the MUSA 1.5.4 runtime and
+MUSA 5.2.0 compiler. The official DEB under musa-data is a reference package;
+do not run its maintainer scripts or manually copy its files over an RPM-managed
+installation.
 
 ## 4. Compiler
 
@@ -89,4 +115,4 @@ scripts/verify-musa.sh
 
 * Boot entry backups: `musa-data/research/system-backups/*/bls-entries/`
 * Previous module: `musa-data/research/system-backups/*/mtgpu.ko.in-use`
-* To restore a boot entry: `sudo cp -a <backup>/. /boot/loader/entries/`
+* To restore a boot entry: `pkexec /usr/bin/cp -a <backup>/. /boot/loader/entries/`

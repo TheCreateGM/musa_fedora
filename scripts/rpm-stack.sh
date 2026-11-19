@@ -50,13 +50,6 @@ installed_version() {
     rpm -q --qf '%{VERSION}-%{RELEASE}' "$1" 2>/dev/null || true
 }
 
-all_exact_installed() {
-    local package
-    for package in "${PACKAGES[@]}"; do
-        [[ "$(installed_version "$package")" == "$(expected_version "$package")" ]] || return 1
-    done
-}
-
 resolve_rpms() {
     local package rpm_file metadata name version matched expected
     [[ -d "$RPM_DIR" ]] || {
@@ -118,13 +111,15 @@ confirm_action() {
 }
 
 ensure_dkms_module() {
-    local state module vermagic aliases
+    local state module vermagic aliases dkms_bin depmod_bin
+    dkms_bin="$(command -v dkms)"
+    depmod_bin="$(command -v depmod)"
     state="$(dkms status -m mtgpu -v 3.1.0 -k "$KVER" 2>/dev/null || true)"
     if [[ "$state" != *installed* ]]; then
-        root_cmd dkms add -m mtgpu -v 3.1.0 --rpm_safe_upgrade || true
-        root_cmd dkms build -m mtgpu -v 3.1.0 -k "$KVER"
-        root_cmd dkms install -m mtgpu -v 3.1.0 -k "$KVER" --force
-        root_cmd depmod -a "$KVER"
+        root_cmd "$dkms_bin" add -m mtgpu -v 3.1.0 --rpm_safe_upgrade || true
+        root_cmd "$dkms_bin" build -m mtgpu -v 3.1.0 -k "$KVER"
+        root_cmd "$dkms_bin" install -m mtgpu -v 3.1.0 -k "$KVER" --force
+        root_cmd "$depmod_bin" -a "$KVER"
     fi
     module="$(modinfo -k "$KVER" -n mtgpu 2>/dev/null || true)"
     [[ -n "$module" && -e "$module" ]] || {
@@ -149,7 +144,6 @@ do_install() {
         echo "ERROR: this RPM set requires Fedora." >&2
         return 1
     }
-    resolve_rpms
     for package in "${PACKAGES[@]}"; do
         [[ "$(installed_version "$package")" == "$(expected_version "$package")" ]] && ((count+=1))
     done
@@ -165,16 +159,25 @@ do_install() {
         return 3
     fi
 
+    resolve_rpms
+
     if (( count != ${#PACKAGES[@]} )); then
         confirm_action "Install the pinned MTT S30 RPM set for Fedora $FEDORA?" || return $?
         backup="$(backup_system_files preinstall)"
         dnf="$(dnf_path)"
-        root_cmd "$dnf" install -y "${SELECTED_RPMS[@]}"
+        if ! root_cmd "$dnf" install -y "${SELECTED_RPMS[@]}"; then
+            echo "ERROR: DNF install failed. Pre-install backup: $backup" >&2
+            return 1
+        fi
     else
+        confirm_action "Build/install the DKMS module for kernel $KVER?" || return $?
         backup="$(backup_system_files predkms)"
     fi
 
-    ensure_dkms_module
+    if ! ensure_dkms_module; then
+        echo "ERROR: DKMS verification/build failed. Backup: $backup" >&2
+        return 1
+    fi
     for package in "${PACKAGES[@]}"; do
         [[ "$(installed_version "$package")" == "$(expected_version "$package")" ]] || {
             echo "ERROR: package version mismatch after install: $package" >&2
@@ -205,7 +208,10 @@ do_remove() {
     confirm_action "Remove only these packages: ${installed[*]}?" || return $?
     backup="$(backup_system_files preremove)"
     dnf="$(dnf_path)"
-    root_cmd "$dnf" remove --no-autoremove -y "${installed[@]}"
+    if ! root_cmd "$dnf" remove --no-autoremove -y "${installed[@]}"; then
+        echo "ERROR: DNF removal failed. Pre-removal backup: $backup" >&2
+        return 1
+    fi
     echo "Removed selected RPMs. Boot arguments and user data were left unchanged."
     echo "Backup: $backup"
     echo "Reinstall the same Fedora RPM set to recover."

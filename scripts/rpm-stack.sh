@@ -37,7 +37,7 @@ dnf_path() {
 
 expected_version() {
     case "$1" in
-        mtgpu-dkms) echo "3.1.0-6.fc$FEDORA" ;;
+        mtgpu-dkms) echo "3.1.0-9.fc$FEDORA" ;;
         mtgpu-firmware) echo "3.1.0-2.fc$FEDORA" ;;
         musa-runtime) echo "1.5.4-3.fc$FEDORA" ;;
         musa-sdk) echo "5.2.0-6.fc$FEDORA" ;;
@@ -88,6 +88,7 @@ backup_system_files() {
         /lib/modules/"$KVER"/extra/mtgpu.ko.xz \
         /lib/modules/"$KVER"/extra/mtgpu.ko.zst \
         /etc/modprobe.d/mtgpu.conf \
+        /etc/modprobe.d/90-mtgpu-headless.conf \
         /etc/ld.so.conf.d/musa-runtime.conf \
         /etc/musa.ini \
         /etc/sysctl.d/99-musa.conf \

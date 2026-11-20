@@ -41,19 +41,22 @@ specification does not establish those features on this Fedora installation.
 The vendor feature claims and project validation state are separated in
 [supported features](supported-features.md).
 
-The supported combination on this host is driver `mtgpu` 3.1.0 + MUSA runtime
-1.5.4 + MUSA 5.2.0 compiler targeting `mp_10`. The separate 5.2.0 *runtime* is
-not compatible with the 3.1.0 driver ABI and must not be substituted for 1.5.4.
-Fedora 45 + Intel + S30 is not vendor-qualified: the public SDK catalog lists
-S5000 for MUSA 5.2.0 and does not list S30 or Fedora.
+The historically exercised combination is driver `mtgpu` 3.1.0 + MUSA runtime
+1.5.4 + MUSA 5.2.0 compiler targeting `mp_10`. It is not live on the current
+boot, and the separate 5.2.0 *runtime* is not compatible with the 3.1.0 driver
+ABI and must not be substituted for 1.5.4. Fedora 45 + Intel + S30 is not
+vendor-qualified: the public SDK catalog lists S5000 for MUSA 5.2.0 and does
+not list S30 or Fedora.
 
 ## Driver build boundary
 
-A fresh isolated build links for kernel 7.3.3 and includes an S30 PCI alias.
-Historical isolated builds logged thousands of compiler/objtool warning lines
-from the opaque vendor core; such artifacts are not load-approved. The live
-driver on this host is the vendor-loaded 3.1.0 module. Do not disable IBT/CET
-or alter vendor-core metadata.
+The current Copr build of `mtgpu-dkms` 3.1.0-9 compiled on Fedora 44, 45, ELN,
+and Rawhide x86_64 and includes the S30 PCI alias. Every chroot emitted 5,486
+objtool warnings from the opaque vendor core, including missing-ENDBR
+relocations and RETPOLINE naked returns. The build is not load-approved. The
+host still has package release 7 installed and keeps `mtgpu` blacklisted; the
+release-8 package was not installed on the host. Do not disable IBT/CET or
+alter vendor-core metadata.
 
 The project-authored `mtgpu_bind.ko` in the inactive `7.2.15-300.fc45.x86_64`
 tree only bound the PCI function and created a character device; its default
@@ -74,6 +77,8 @@ and global alias were hash-verified and quarantined under `musa-data`.
 | MUSA 5.2.0 `mcc` `mp_10` vector-add | Verified; ran on the S30 |
 | MUSA compute suite: SAXPY, reduction, atomics, constant, math, 2D grid, D2D, FP64 | Verified; all host-checked results passed |
 | Headless Vulkan device, queue, buffer, host-visible map/readback | Verified; display output and rendering not tested |
+| MUSA 5.2.0 compiler and runtime-header check | Compile-only passed on the current host; explicit `mp_10` target emitted; no binary was run |
+| Complete current Copr RPM set | All five Fedora 45 RPM signatures/digests verified; DNF install, `rpm -V`, and `dnf check` passed in a disposable Fedora 45 container with scriptlets disabled; installed SDK compile-only test passed |
 | Moore Threads OpenCL platform | Unavailable; no system MT ICD; archived ICD compute probe caused kernel Oops |
 | Fedora RPM set install + packaged `mcc` on the S30 | Verified; isolated Fedora 45 container, 13 checks passed |
 | OpenGL, display rendering, video, `torch_musa`, other frameworks | Not tested or established |

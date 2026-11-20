@@ -13,14 +13,18 @@ and drives the current desktop session.
 - Moore Threads MTT S30 is enumerated at `0000:01:00.0`, PCI ID `1ed5:0102`;
 its HDMI/DP audio function is `0000:01:00.1`, ID `1ed5:01ff`.
 - The S30 functions are **unbound**. `/sys/module/mtgpu` and `/dev/mtgpu.0`
-are absent. No DRM render node belongs to the S30; `/dev/dri/renderD128` is
-Intel, and `renderD129` belongs to the virtual MVGAL device.
+are absent. `/dev/dri/renderD128` is Intel; no other DRM render node is
+currently present.
 - IOMMU remains enabled (`intel_iommu=on iommu=pt`); Secure Boot is disabled.
-- Installed packages are `mtgpu-dkms-3.1.0-5.fc45`,
+- Installed packages are `mtgpu-dkms-3.1.0-7.fc45`,
 `mtgpu-firmware-3.1.0-2.fc45`, `musa-runtime-1.5.4-3.fc45`,
 `musa-sdk-5.2.0-6.fc45`, and `musa-toolkit-3.1.0-1.fc45`. DKMS has a module
 for the current kernel, but installation alone does not mean that it is loaded
 or usable.
+- The installed release-7 config `/etc/modprobe.d/90-mtgpu-headless.conf`
+still includes `rm_feature_level=1`, which the 3.1.0-8 package removes after
+the documented kernel fault. Releases 8 and 9 were built in Copr but were not
+installed on this host; the blacklist below keeps the old option inactive.
 - Proprietary MUSA firmware files are present and the firmware package owns
 them. The module metadata requests additional `mtfw-*` and `mtvpu-*` images;
 the presence of firmware does not establish driver initialization.
@@ -82,11 +86,31 @@ package builds as succeeded:
 
 | Package | Version-release | Copr build | Result/chroots |
 |---|---:|---:|---|
-| `mtgpu-dkms` | `3.1.0-5` | [11339362](https://copr.fedorainfracloud.org/coprs/build/11339362) | succeeded: Fedora 44, 45, ELN, Rawhide x86_64 |
+| `mtgpu-dkms` | `3.1.0-9` | [11365750](https://copr.fedorainfracloud.org/coprs/build/11365750) | succeeded: Fedora 44, 45, ELN, Rawhide x86_64 |
 | `mtgpu-firmware` | `3.1.0-2` | [11339153](https://copr.fedorainfracloud.org/coprs/build/11339153) | succeeded: Fedora 44, 45, ELN, Rawhide x86_64 |
 | `musa-runtime` | `1.5.4-3` | [11339379](https://copr.fedorainfracloud.org/coprs/build/11339379) | succeeded: Fedora 44, 45, ELN, Rawhide x86_64 |
 | `musa-sdk` | `5.2.0-6` | [11339529](https://copr.fedorainfracloud.org/coprs/build/11339529) | succeeded: Fedora 44, 45, ELN, Rawhide x86_64 |
 | `musa-toolkit` | `3.1.0-1` | [11339164](https://copr.fedorainfracloud.org/coprs/build/11339164) | succeeded: Fedora 44, 45, ELN, Rawhide x86_64 |
+
+Prior intermediate builds for `mtgpu-dkms`:
+- Release 6 failed across chroots due to missing `systemd-rpm-macros` during `%files` macro expansion for `70-mtgpu.rules`.
+- Release 7 ([11365567](https://copr.fedorainfracloud.org/coprs/build/11365567)) resolved buildroot dependencies and succeeded across all 4 chroots.
+- Release 8 ([11365657](https://copr.fedorainfracloud.org/coprs/build/11365657)) removed fatal `rm_feature_level=1` from `90-mtgpu-headless.conf` (see [`root-cause-rm-feature-level-2026-11-20.md`](root-cause-rm-feature-level-2026-11-20.md)).
+- Release 9 ([11365750](https://copr.fedorainfracloud.org/coprs/build/11365750)) removed the unsupported claim that an IBT property note makes the opaque vendor core safe to load on IBT/CET kernels.
+
+The second configured project, `axogm/musa-mtt-s30`, was also rebuilt to cover
+its additional Fedora 43 chroot. All five builds succeeded across Fedora 43,
+44, 45, ELN, and Rawhide x86_64:
+
+- [`mtgpu-firmware`, build 11365759](https://copr.fedorainfracloud.org/coprs/build/11365759)
+- [`mtgpu-dkms` 3.1.0-9, build 11365760](https://copr.fedorainfracloud.org/coprs/build/11365760)
+- [`musa-runtime`, build 11365761](https://copr.fedorainfracloud.org/coprs/build/11365761)
+- [`musa-sdk`, build 11365762](https://copr.fedorainfracloud.org/coprs/build/11365762)
+- [`musa-toolkit`, build 11365763](https://copr.fedorainfracloud.org/coprs/build/11365763)
+
+All five Fedora 43 builder logs were inspected. They show successful RPM
+results and no fatal build errors; the DKMS log again contains 5,486 objtool
+warning lines.
 
 The configured Fedora chroots are x86_64 only. These are Copr build/package
 results, not tests of installing or loading the driver or running the packages
@@ -105,6 +129,40 @@ was clean before the dated inventory report was added. No host packages,
 services, kernel modules, modprobe files, firmware, boot settings, or display
 configuration were changed. No claim is made here that the current boot has a
 working MUSA GPU path.
+
+## Follow-on validation after the inventory
+
+- `MUSA_PATH=/usr/local/musa-5.2 scripts/test-toolchain.sh` passed on the host
+  and inside a Fedora 45 container after installing the Copr package set. Both
+  runs emitted a MUSA fat-binary section, produced an explicit `mp_10` target,
+  and syntax-checked the runtime headers. Neither run executed the program or
+  queried the runtime.
+- All five actual Fedora 45 Copr RPMs (DKMS 3.1.0-9, firmware 3.1.0-2,
+  runtime 1.5.4-3, SDK 5.2.0-6, and toolkit 3.1.0-1) passed signature and
+  digest verification against the project's Copr key
+  (`0F9E1B00A8990F19AB661745B21968F295ECB7E4`). DNF installed the set into a
+  disposable Fedora 45 container with RPM scriptlets disabled; `rpm -V` and
+  `dnf check` passed. DNF's signature checks were disabled for that transaction;
+  the five project RPMs were checked separately. The packaged driver config
+  omits `rm_feature_level=1`. DKMS was not run in the container.
+- Host `rpm -V` was clean for `mtgpu-dkms` 3.1.0-7, firmware, SDK, and
+  toolkit. `musa-runtime` reports its disabled `/etc/modprobe.d/mtgpu.conf`
+  missing and `/usr/lib64/libdrm_mtgpu.so.1` redirected to
+  `libmtperf_target.so`; those local differences were left untouched.
+- `scripts/test/check-hardware.sh` again reported PCI identity `1ed5:0102`,
+  unbound driver, no MTT device nodes, and `GPU_TEST_STATUS: NOT RUN` (exit 3).
+  The current-boot kernel journal still has no `mtgpu` probe/workload entries;
+  no GPU, runtime, OpenCL, or Vulkan test was attempted. No GPU-related system
+  service is active, and `systemctl --failed` reported no failed units.
+- The complete Fedora 44/45/ELN/Rawhide logs for Copr build 11365750 each show
+  a successful module compile and RPM result, with 5,486 objtool warning lines
+  per chroot. The warnings include missing-ENDBR relocations and RETPOLINE
+  naked returns. Build 11365657 shows the same warnings. These successful
+  builds do not establish that the module is safe to load.
+- The Fedora 45 package set installed with scriptlets disabled; package
+  verification and `dnf check` were clean. The in-container compiler check
+  emitted the MUSA fat-binary section, produced explicit `mp_10` output, and
+  syntax-checked runtime headers. No executable or runtime query was run.
 
 ## Required next step
 

@@ -2,7 +2,7 @@
 
 Name:           mtgpu-dkms
 Version:        3.1.0
-Release:        6%{?dist}
+Release:        9%{?dist}
 Summary:        DKMS kernel driver source for Moore Threads GPUs (mtgpu)
 
 License:        GPL-2.0-only
@@ -26,6 +26,10 @@ BuildRequires:  make
 BuildRequires:  elfutils-libelf-devel
 BuildRequires:  openssl-devel
 BuildRequires:  kmod
+# Defines the udev rules directory macro used below; without it the %files
+# entry for 70-mtgpu.rules expands to a literal macro name and rpmbuild aborts
+# with "File must begin with /".
+BuildRequires:  systemd-rpm-macros
 
 %description
 The mtgpu-dkms package installs the Moore Threads mtgpu kernel driver source
@@ -40,9 +44,12 @@ required to link a loadable module. See docs/driver-porting.md for the Fedora
 kernel-porting work (conftest fixups, DRM ABI version, OB configuration
 fix-up, vmalloc fallback).
 
-The resulting module advertises the MTT S30 / S80 / S5000 PCI IDs, carries the
-GNU property note "x86 feature: IBT", and is safe to load on Fedora kernels
-with IBT/CET enabled.
+The resulting module advertises the MTT S30 / S80 / S5000 PCI IDs. The opaque
+vendor core object emits extensive objtool warnings on Fedora kernels,
+including missing-ENDBR relocations and RETPOLINE naked returns. The module's
+GNU property note "x86 feature: IBT" does not establish safe IBT/CET runtime
+behavior. Successful packaging and kernel compilation are build checks only;
+they are not approval to load the module on a Fedora desktop.
 
 After installation the module is built immediately for the running kernel. Load
 it with:
@@ -141,6 +148,25 @@ fi
 depmod -a >/dev/null 2>&1 || :
 
 %changelog
+* Fri Nov 20 2026 MUSA Fedora Team <musa@fedoraproject.org> - 3.1.0-9
+- Remove the unsupported claim that the module is safe to load on IBT/CET
+  kernels based on its GNU property note. The opaque vendor core continues to
+  emit extensive objtool warnings in the configured Fedora build chroots.
+
+* Fri Nov 20 2026 MUSA Fedora Team <musa@fedoraproject.org> - 3.1.0-8
+- Remove fatal rm_feature_level=1 option from 90-mtgpu-headless.conf.
+  rm_feature_level activates an incomplete Resource Manager path in the vendor
+  binary core (mtgpu_core.o_binary) which causes an immediate NULL-pointer
+  dereference in gpu_phys_heap_alloc_mem (CR2: 0x128) during device initialization.
+  Default rm_feature_level=0 preserves the verified PVR memory management model.
+
+* Fri Nov 20 2026 MUSA Fedora Team <musa@fedoraproject.org> - 3.1.0-7
+- BuildRequire systemd-rpm-macros so the udev rules directory macro is defined
+  in the build chroot. The release 6 Copr build failed on every chroot with
+  "File must begin with /" for the 70-mtgpu.rules path because the macro is not
+  in the minimal build root; the local build only worked because the host has
+  systemd-rpm-macros installed.
+
 * Fri Nov 20 2026 MUSA Fedora Team <musa@fedoraproject.org> - 3.1.0-6
 - The DISPC register window is absent from the component match in headless
   modes (display=none/display=dummy) because the DP/DC components are then

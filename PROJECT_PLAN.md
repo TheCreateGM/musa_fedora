@@ -20,13 +20,19 @@ PCI discovery or a successful compile alone is still not hardware validation.
 ## Latest live host status — 2026-11-20
 
 Fedora 45 runs kernel `7.3.4-300.fc45.x86_64`. The MTT S30 is visible on PCI
-but unbound; `/etc/modprobe.d/blacklist-mtgpu.conf` blocks the driver after
-prior DRM/KMS/GNOME failures. No S30 device node or S30 render node is present.
-The project hardware checker and gated GPU smoke test report NOT RUN/BLOCKED;
-no current-boot MUSA workload has been tested. Do not remove the blacklist or
-load/unbind/rebind the driver without an approved display rollback and
-vendor-core recovery plan. See
-[`docs/current-state-2026-11-20.md`](docs/current-state-2026-11-20.md).
+at `0000:01:00.0` (`1ed5:0102`). Root cause analysis of driver loading faults
+was completed: setting `rm_feature_level=1` activated an incomplete vendor
+Resource Manager path in `mtgpu_core.o_binary` causing an immediate NULL pointer
+dereference in `gpu_phys_heap_alloc_mem` (CR2: 0x128). Removing `rm_feature_level=1`
+and preserving `rm_feature_level=0` restores the verified PVR memory model.
+`mtgpu-dkms` was updated to `3.1.0-9` (Copr build [11365750](https://copr.fedorainfracloud.org/coprs/build/11365750),
+succeeded on Fedora 44, 45, ELN, Rawhide x86_64) shipping the corrected
+`90-mtgpu-headless.conf` (`display=none disable_fbdev=1 mtgpu_drm_major=2`)
+and removing an unsupported claim that a GNU IBT property note establishes
+safe runtime behavior. The host still has release 7 installed and the S30
+remains unbound/blacklisted; releases 8 and 9 were not installed on the host.
+See [`docs/current-state-2026-11-20.md`](docs/current-state-2026-11-20.md) and
+[`docs/root-cause-rm-feature-level-2026-11-20.md`](docs/root-cause-rm-feature-level-2026-11-20.md).
 
 ## Historical host status — 2026-11-17 (superseded)
 
@@ -160,6 +166,29 @@ Evidence is recorded in
     the physical S30. Two packaging defects were fixed (SDK release 5 ships
     `clang-offload-bundler`; release 6 requires `gcc-c++`). Copr build 11339529
     publishes SDK 5.2.0-6 in all four chroots.
+13. Updated `mtgpu-dkms` through releases 6, 7, and 8. Release 6 added headless
+    VPU layout compatibility in `inc/s30_vpu_compat.h`. Release 7 fixed buildroot
+    udev macro expansion via `BuildRequires: systemd-rpm-macros` (Copr build
+    11365567). Release 8 eliminated the fatal `rm_feature_level=1` parameter from
+    `90-mtgpu-headless.conf`, restoring the stable PVR memory model (Copr build
+    11365657 succeeded across Fedora 44, 45, ELN, Rawhide x86_64).
+14. Release 9 removed the unsupported IBT/CET load-safety claim; Copr build
+    11365750 succeeded across Fedora 44, 45, ELN, and Rawhide x86_64. The full
+    logs still contain 5,486 objtool warning lines in each chroot. The Fedora
+    45 RPM passed signature/digest checks and a dependency-resolving container
+    install with scriptlets disabled. The host remains on release 7 and the
+    GPU stays blacklisted/unbound.
+15. Rebuilt the current five-package set in the separately configured
+    `musa-mtt-s30` Copr project to cover its Fedora 43 target. Builds 11365759
+    through 11365763 succeeded across Fedora 43, 44, 45, ELN, and Rawhide
+    x86_64. Fedora 43 logs were inspected; the DKMS build still emits 5,486
+    objtool warnings. See the [current validation report](docs/current-state-2026-11-20.md).
+16. Downloaded the Fedora 45 RPMs from the primary Copr project and
+    independently verified all five signatures/digests against its key. DNF
+    installed the set in a disposable Fedora 45 container with scriptlets
+    disabled; `rpm -V` and `dnf check` passed. The installed compiler passed
+    the compile-only smoke test, including explicit `mp_10` output. No runtime
+    or GPU call was made.
 
 ## Remaining work
 

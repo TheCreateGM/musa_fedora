@@ -22,7 +22,7 @@ MOD_DIR="/lib/modules/${KVER}/extra"
 RT_DIR="/usr/local/musa"
 SDK_DIR="/usr/local/musa-5.2"
 FW_DIR="/lib/firmware/mthreads"
-MODPROBE_CONF="/etc/modprobe.d/mtgpu.conf"
+MODPROBE_CONF="/etc/modprobe.d/90-mtgpu-headless.conf"
 
 have() { [[ -e "$1" ]] && echo "present" || echo "absent"; }
 have_mod() {

@@ -17,7 +17,18 @@ Oops. These checks validate only the exercised operations; they do not
 establish display rendering, video, framework, or general library support.
 PCI discovery or a successful compile alone is still not hardware validation.
 
-## Live host status — 2026-11-17
+## Latest live host status — 2026-11-20
+
+Fedora 45 runs kernel `7.3.4-300.fc45.x86_64`. The MTT S30 is visible on PCI
+but unbound; `/etc/modprobe.d/blacklist-mtgpu.conf` blocks the driver after
+prior DRM/KMS/GNOME failures. No S30 device node or S30 render node is present.
+The project hardware checker and gated GPU smoke test report NOT RUN/BLOCKED;
+no current-boot MUSA workload has been tested. Do not remove the blacklist or
+load/unbind/rebind the driver without an approved display rollback and
+vendor-core recovery plan. See
+[`docs/current-state-2026-11-20.md`](docs/current-state-2026-11-20.md).
+
+## Historical host status — 2026-11-17 (superseded)
 
 - Fedora Linux 45 Workstation, x86_64, kernel `7.3.3-300.fc45.x86_64`.
 - Intel Core i5-13500 and Intel UHD Graphics 770 (`i915`), which drives the
@@ -25,7 +36,7 @@ PCI discovery or a successful compile alone is still not hardware validation.
 - MTT S30 at `0000:01:00.0`, PCI `1ed5:0102`, 4 GiB; vendor audio function
   `1ed5:01ff`. The desktop stays on Intel `i915`; the S30 does not drive
   display output, though a headless Vulkan device/memory path passed.
-- `mtgpu` driver 3.1.0 is loaded and live (`initstate=live`); module
+- Historical 2026-11-17: `mtgpu` driver 3.1.0 was loaded and live (`initstate=live`); module
   `/lib/modules/7.3.3-300.fc45.x86_64/extra/mtgpu.ko`, vermagic
   `7.3.3-300.fc45.x86_64`. `/dev/mtgpu.0` and the S30 DRM render node
   `/dev/dri/renderD129` are present.
@@ -88,13 +99,13 @@ historical hashes, logs, and build/test evidence. The
 [2026-11-12 report](docs/live-host-recheck-2026-11-12.md) documents the
 earlier quarantine action.
 
-## Evidence so far
+## Historical evidence and technical findings
 
 | Layer | Evidence | Status |
 |---|---|---|
 | PCI/device discovery | S30 enumerates as `1ed5:0102`; `mtgpu` 3.1.0 live | Verified |
 | Official kernel source | Separate MUSA 5.2.0 DKMS source includes S30 PCI ID | Source recognition only; not the source used by the active 3.1.0 build |
-| Active S30 driver source | Project `src/` and `inc/` identify as package version 3.1.0 | Matching 3.1.0 driver is loaded and live on this host |
+| Active S30 driver source | Project `src/` and `inc/` identify as package version 3.1.0 | DKMS build is installed but not loaded; the S30 is unbound and the module is blacklisted |
 | Legacy S30 desktop bundle | Official 2.1.1 source recognizes S30 ID `1ed5:0102` | Historical; DKMS build fails against 7.3.3 and its bundled core has no IBT notes/ENDBR |
 | Fedora kernel port | Isolated 3.1.0 `mtgpu.ko` links for kernel 7.3.3 | Historical build artifact had 5,504 compiler/objtool warning lines; the vendor-loaded module is live |
 | MUSA compiler | Product filing maps S30 to SuDi; architecture docs map SuDi to `MP_10`; 5.2.0 compiler emits `mp_10` | Verified on the S30: the `mp_10` vector-add ran |

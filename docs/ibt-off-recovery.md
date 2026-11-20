@@ -1,9 +1,9 @@
 # Kernel IBT status and recovery
 
 > Historical status record. The 2026-11-13 "latest observed state" below is
-> superseded by the [2026-11-17 current state](current-state-2026-11-17.md): the
-> vendor `mtgpu` 3.1.0 driver is now loaded and live. The recovery procedure and
-> the "do not disable IBT/CET" guidance remain valid. Retained as a dated record.
+> superseded by the [2026-11-20 current state](current-state-2026-11-20.md):
+> `mtgpu` is not loaded and the S30 is unbound. The recovery procedure and the
+> "do not disable IBT/CET" guidance remain valid. Retained as a dated record.
 
 ## Latest observed state (2026-11-13)
 

@@ -1,12 +1,14 @@
 # Verified project features
 
-This table lists only evidence-backed facts. The current host baseline is the
-[current state](current-state-2026-11-17.md).
+This table lists evidence-backed facts from prior hardware tests; it is not a
+statement that the GPU is currently available. The current host baseline is the
+[live state](current-state-2026-11-20.md); the prior test record is
+[current state (2026-11-17)](current-state-2026-11-17.md).
 
 | Area | Status | Evidence |
 |---|---|---|
 | S30 PCI identity | Verified, `1ed5:0102` | Live sysfs inventory |
-| S30 PCI driver binding | Verified; `mtgpu` 3.1.0 loaded, `initstate=live` | `/dev/mtgpu.0` and `/dev/dri/renderD129` present |
+| S30 PCI driver binding | Historically verified 2026-11-17; currently unbound and blacklisted | Current read-only inventory: no PCI driver symlink or `/dev/mtgpu.0` |
 | IOMMU | Verified | `intel_iommu=on iommu=pt`; S30 in IOMMU group 11 |
 | Device telemetry | Verified | `mthreads-gmi` reports driver 3.1.0, MTT S30, 4096 MiB |
 | MUSA 1.5.4 runtime discovery | Verified | `musaInfo` detects one device |
@@ -16,7 +18,7 @@ This table lists only evidence-backed facts. The current host baseline is the
 | MUSA compute operations | Verified on hardware | SAXPY, shared reduction, atomics, constant memory, device math, 2D grid, D2D copy, and FP64 passed |
 | Headless Vulkan | Verified, limited | S30 ICD enumerates device/queue and creates/maps a buffer; no rendering or presentation tested |
 | Moore Threads OpenCL | Unavailable; archived ICD compute probe unsafe | Default loader sees MVGAL and Intel only; archived MobiMaliang 2.1.1 ICD compute probe triggered an `mtgpu` kernel Oops; see [current state](current-state-2026-11-17.md) |
-| End-to-end check | Verified | `scripts/verify-musa.sh`: 13 passed, 0 failed, 1 skipped |
+| End-to-end check | Historical result only | `scripts/verify-musa.sh`: 13 passed, 0 failed, 1 skipped on 2026-11-17; not rerun because current driver loading is blocked for safety |
 | OpenGL, video, `torch_musa`, other frameworks | Not tested or claimed | Not exercised on this host |
 | Vendor-qualified Fedora 45 + S30 stack | Not established | Public catalog lists S5000, not S30 or Fedora |
 

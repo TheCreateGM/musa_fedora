@@ -1,7 +1,9 @@
 # MUSA on Fedora — MTT S30
 
-Reproducible MUSA environment for the **Moore Threads MTT S30**
-(`1ed5:0102`, 4 GiB, 1024 MUSA cores) on **Fedora Linux 45 / kernel 7.3.3**.
+MUSA driver/runtime packaging and test sources for the **Moore Threads MTT S30**
+(`1ed5:0102`) on Fedora. The latest live host inventory is Fedora 45 / kernel
+`7.3.4-300.fc45.x86_64`; it found the S30 unbound and MUSA GPU tests blocked.
+See [the 2026-11-20 live status](docs/current-state-2026-11-20.md).
 
 The project targets the vendor's own S30 stack — **mtgpu driver 3.1.0** plus
 **MUSA runtime 1.5.4** from `musa_3.1.0-pc_x86.deb` — and codes kernels with the
@@ -11,6 +13,13 @@ The project targets the vendor's own S30 stack — **mtgpu driver 3.1.0** plus
 > not listed as verified below is *not* claimed to work.
 
 ## Status
+
+**Current host:** S30 is present but unbound. `/etc/modprobe.d/blacklist-mtgpu.conf`
+intentionally blocks the driver because prior driver loads caused GNOME/KMS
+crashes; prior vendor-core faults also make ad-hoc load/rebind unsafe. The
+read-only hardware check and gated GPU test both report NOT RUN/BLOCKED. No
+workload was executed in the current boot. The following rows describe only
+recorded, historical 2026-11-17 results, not the current boot state.
 
 | Layer | State | Evidence |
 |---|---|---|
@@ -26,11 +35,11 @@ The project targets the vendor's own S30 stack — **mtgpu driver 3.1.0** plus
 | MUSA compute operations | **verified** | SAXPY, shared reduction, atomics, constant memory, device math, 2D launch, D2D copy, and FP64 passed |
 | Headless Vulkan | **verified, limited** | S30 device/queue, buffer allocation, and host-visible memory map passed; no rendering test |
 | Moore Threads OpenCL | **unavailable** | No MT ICD in the default loader; archived 2.1.1 ICD compute probe caused a kernel Oops (do not use) |
-| Fedora RPM builds | **built** | all five packages build locally and pass `rpm -K --nosignature`; Copr publishes them for Fedora 44, Fedora 45, ELN, and Rawhide x86_64 — see [current status](docs/current-state-2026-11-17.md) |
+| Fedora RPM builds | **Copr succeeded** | Copr reports all five intended package builds succeeded for Fedora 44, Fedora 45, ELN, and Rawhide x86_64; current local ignored RPMs are older than the latest specs — see [build status](docs/current-state-2026-11-20.md) |
 | Isolated RPM install + GPU test | **verified** | the five-RPM set installs in a throwaway Fedora 45 container (scriptlets suppressed) and the packaged runtime and `mcc` run on the S30: `13 passed, 0 failed` |
 
-Verification command on 2026-11-17: `scripts/verify-musa.sh` — **13 passed,
-0 failed, 1 skipped**. The skip is Moore Threads OpenCL: the loader found
+Historical verification command on 2026-11-17: `scripts/verify-musa.sh` — **13 passed,
+0 failed, 1 skipped**. It must not be read as a current-host result. The skip is Moore Threads OpenCL: the loader found
 MVGAL and Intel platforms, but no MT OpenCL ICD. A separate experiment with
 an archived MobiMaliang 2.1.1 ICD triggered a kernel Oops during compute and
 must not be repeated; see [the failure record](docs/current-state-2026-11-17.md).
@@ -93,18 +102,17 @@ recheck. Do not use the 5.2.0 runtime for S30 execution.
 * The verified host uses the vendor mtgpu 3.1.0 stack and MUSA runtime 1.5.4;
   MUSA 5.2.0 is used only for its compiler/headers. The 5.2 runtime is not
   compatible with this 3.1.0 driver ABI; do not substitute it for runtime 1.5.4.
-* The current package set is `mtgpu-dkms` 3.1.0-5, `mtgpu-firmware` 3.1.0-2,
-  `musa-runtime` 1.5.4-3, `musa-sdk` 5.2.0-6, and `musa-toolkit` 3.1.0-1. All
-  five build locally and pass `rpm -K --nosignature` digest verification. Copr
-  publishes them for Fedora 44, Fedora 45, ELN, and Rawhide x86_64; see
-  [current status](docs/current-state-2026-11-17.md) for the build numbers.
-* The five Fedora RPMs are installed on the host and were also tested in an
-  isolated Fedora 45 container with scriptlets suppressed and only the S30
-  device nodes passed through. The packaged runtime and `mcc` vector-add ran
-  on the physical S30 in the container test (13 checks passed). Two packaging
-  defects were fixed to get there — the SDK now ships `clang-offload-bundler`
-  (release 5) and requires `gcc-c++`, which provides the `libstdc++.so` linker
-  symlink (release 6).
+* The installed package set is `mtgpu-dkms` 3.1.0-5, `mtgpu-firmware` 3.1.0-2,
+  `musa-runtime` 1.5.4-3, `musa-sdk` 5.2.0-6, and `musa-toolkit` 3.1.0-1.
+  The latest Copr API check reported all five builds succeeded in Fedora 44,
+  Fedora 45, ELN, and Rawhide x86_64. This environment's ignored local RPMs
+  predate the latest spec releases; see the dated build numbers in
+  [live status](docs/current-state-2026-11-20.md).
+* A Fedora 45 container test and packaged compiler/runtime test on the physical
+  S30 passed on 2026-11-17, with scriptlets suppressed. This is historical
+  evidence from a prior loaded-driver state, not a test of the current boot.
+  The SDK packaging fixes included shipping `clang-offload-bundler` and
+  requiring `gcc-c++` for the C++ linker/headers.
 * The installed 1.5.4 runtime ships its own `musa_runtime.h` at
   `/usr/local/musa/include`; compile host runtime-API code against those
   headers, not the 5.2.0 SDK headers. `sizeof(struct musaDeviceProp)` is 728
@@ -123,8 +131,13 @@ recheck. Do not use the 5.2.0 runtime for S30 execution.
 
 * The recorded tests are read-only apart from temporary files and do not install
   packages, change boot settings, or load/unload/rebind kernel modules.
-* The current boot logged an `mtgpu` kernel fault during the archived OpenCL
-  experiment, so no GPU workload runs in this boot. The reviewed procedure to
+* Current host state (2026-11-20): the S30 is unbound and `mtgpu` is
+  blacklisted to protect the Intel-driven GNOME desktop after prior KMS
+  crashes. No current-boot GPU test ran. See
+  [the live inventory](docs/current-state-2026-11-20.md). Do not remove the
+  blacklist or load/unbind/rebind the driver without a reviewed recovery plan.
+* The older boot that logged an `mtgpu` kernel fault during the archived OpenCL
+  experiment also must not be used for GPU workloads. The reviewed procedure to
   resume hardware validation after a clean reboot is in
   [docs/clean-boot-resume-plan-2026-11-17.md](docs/clean-boot-resume-plan-2026-11-17.md);
   `scripts/test-gpu.sh` now refuses to run in a boot that already logged an

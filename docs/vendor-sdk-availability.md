@@ -1,10 +1,12 @@
 # MUSA driver and SDK availability
 
 Current live host state is recorded in the
-[current state](current-state-2026-11-17.md). Vendor/package research
-below was reviewed 2026-11-12. The staged official Mthreads 5.2.0 source recognizes the
-S30 PCI ID. This is source-level recognition; on this host it has since been
-confirmed in practice (driver 3.1.0 live, runtime 1.5.4 detects the S30).
+[current state](current-state-2026-11-20.md); the loaded-driver tests referenced
+below are historical 2026-11-17 evidence. Vendor/package research below was
+reviewed 2026-11-12. The staged official Mthreads 5.2.0 source recognizes the
+S30 PCI ID. This is source-level recognition; a prior boot confirmed it in
+practice with driver 3.1.0 and runtime 1.5.4. The card is currently unbound
+and GPU tests are blocked for safety.
 The current public SDK catalogue lists MUSA 5.2.0 Linux packages for MTT
 S5000 and does not list S30 among its product filters or package targets.
 Older catalog entries list selected S3000/S4000/S80 and CPU/OS combinations,

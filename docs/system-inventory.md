@@ -1,11 +1,30 @@
 # Live host inventory and verification record
 
-Latest live recheck: 2026-11-17. This describes observed host state on this
-Fedora host; Fedora is not a vendor-qualified S30 OS. The complete current
-record is [here](current-state-2026-11-17.md). Earlier host snapshots below
-are historical.
+Latest live recheck: 2026-11-20. Fedora is not a vendor-qualified S30 OS.
+The complete current record is
+[here](current-state-2026-11-20.md). The 2026-11-17 loaded-driver report below
+is retained as historical hardware-test evidence only.
 
-## Latest live state — 2026-11-17
+## Latest live state — 2026-11-20
+
+| Item | Observed |
+|---|---|
+| Running kernel | `7.3.4-300.fc45.x86_64` |
+| Active command line | `intel_iommu=on iommu=pt`; no `ibt=off` or `noibt` override |
+| Accelerator | Moore Threads MTT S30, PCI `1ed5:0102`, BDF `0000:01:00.0`; audio function `1ed5:01ff` |
+| S30 PCI binding | Unbound; no PCI `driver` symlink |
+| Driver/module | DKMS 3.1.0 installed for this kernel; `mtgpu` not loaded; `/etc/modprobe.d/blacklist-mtgpu.conf` intentionally blocks automatic loading after prior GNOME/KMS crashes |
+| IOMMU | Enabled by kernel command line; device groups were not re-enumerated in this snapshot |
+| MTT device nodes | `/dev/mtgpu.0` absent; no DRM render node is associated with the S30 (`renderD129` is virtual MVGAL) |
+| Active display | Intel UHD Graphics 770 (`i915`) |
+| Firmware/userspace | Firmware and MUSA runtime/SDK RPMs installed; no runtime API was called |
+| GPU tests | Not run; read-only hardware checker and gated GPU test both report NOT RUN/BLOCKED |
+| Security | Secure Boot disabled; kernel IBT enabled |
+
+No package, boot, module, blacklist, firmware, or display configuration was
+changed. The prior 2026-11-17 table follows as a dated historical state.
+
+## Historical live state — 2026-11-17 (superseded)
 
 | Item | Observed |
 |---|---|

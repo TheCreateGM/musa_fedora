@@ -1,8 +1,11 @@
 # Installation
 
-The MTT S30 on this host already has the vendor **driver 3.1.0** loaded and the
-matching **MUSA runtime 1.5.4** installed. This document describes how to
-reproduce that state and how to enable the required IOMMU.
+The MTT S30 is present on this host, and the vendor **driver 3.1.0** plus
+matching **MUSA runtime 1.5.4** are installed. The driver is currently
+blacklisted and the card is unbound to protect the Intel-driven desktop after
+prior DRM/KMS crashes; MUSA GPU workloads are not currently available. See the
+[current live status](docs/current-state-2026-11-20.md). This guide describes
+package workflows and IOMMU setup; it does not authorize loading the driver.
 
 ## Package-managed install and removal
 
@@ -40,8 +43,10 @@ uses DNF with --no-autoremove, and refuses while mtgpu is loaded. It leaves
 IOMMU boot arguments, user data, and unrelated packages unchanged. Do not use
 manual rm, modprobe -r, or file-copy commands to replace/remove the live module.
 
-The five RPMs are already installed on this host and the module is live. The
-install action therefore reports ALREADY_INSTALLED without an RPM transaction.
+The five RPMs are installed on this host. The module is currently not loaded,
+and the `mtgpu` blacklist remains in place; the install helper does not load or
+replace a driver. Do not remove the blacklist or load/unbind/rebind the driver
+without a reviewed display rollback and vendor-core recovery plan.
 
 
 ## 1. Enable the IOMMU (required for any MUSA runtime call)

@@ -4,13 +4,12 @@ The active `src/`, `inc/`, and `Makefile` tree identifies as the S30 driver
 package version 3.1.0. The separate `driver-mtgpu-5.2.0/` tree is research
 and build work for the MUSA 5.2.0 server driver; it is not the source used by
 the current isolated S30 build. The authoritative current host snapshot is
-the [current state](current-state-2026-11-17.md): kernel 7.3.3, `mtgpu` 3.1.0
-loaded and live (`initstate=live`) with the MTT S30 bound at `0000:01:00.0`
-(`1ed5:0102`), IOMMU enabled (`intel_iommu=on iommu=pt`, S30 in group 11),
-`/dev/mtgpu.0` and the S30 render node `/dev/dri/renderD129` present, with the
-Intel `i915` GPU still driving the desktop. The earlier
+the [2026-11-20 live status](current-state-2026-11-20.md): kernel 7.3.4,
+`mtgpu` blacklisted and not loaded, S30 unbound, Intel `i915` driving the
+desktop, and no S30 device/render nodes. The 2026-11-17 live-driver and
+hardware-test report is historical. The earlier
 [2026-11-13 live recheck](live-host-recheck-2026-11-13.md) (unbound S30,
-`initstate=coming`, no device nodes) is now historical.
+`initstate=coming`, no device nodes) is also historical.
 
 ## Production tree
 
@@ -37,21 +36,22 @@ module output under `musa-data`; it does not install or load a module:
 
 The latest isolated 3.1.0 build was produced for kernel 7.3.3 in a fresh
 directory under `musa-data/research/builds`. It has matching vermagic and an
-S30 alias but carries 5,502 compiler/objtool warning lines. A 3.1.0 module is
-installed at
-`/lib/modules/7.3.3-300.fc45.x86_64/extra/mtgpu.ko` and is loaded and live on
-this host; the isolated build artifact in `musa-data` is not what is
-installed. Review of the vendor core, driver initialization, and GPU
-execution is partly validated: the S30 is bound and live, and the four
-hardware-verified tests below pass.
+S30 alias but carries 5,502 compiler/objtool warning lines. A DKMS 3.1.0
+module exists for the current kernel, but it is not loaded. The S30 is unbound
+because `/etc/modprobe.d/blacklist-mtgpu.conf` protects the desktop after prior
+DRM/KMS crashes. The 2026-11-17 hardware tests were performed while a driver
+was live; they do not establish current initialization or GPU execution. Do
+not remove the blacklist or load, unbind, or rebind the driver without a
+reviewed rollback plan.
 See
 [driver-porting.md](driver-porting.md) for results and safety gates.
 
 The five Fedora RPM specs (`mtgpu-dkms`, `mtgpu-firmware`, `musa-runtime`,
-`musa-sdk`, `musa-toolkit`) describe the intended packaging, but the running
-stack is currently unowned. Do not install over the live module or unbind the
-device. The two quarantine scripts are recovery tools for known unvalidated
-artifacts; they do not install MUSA support.
+`musa-sdk`, `musa-toolkit`) describe the package set; all five are installed
+on the host. Their presence does not load the blacklisted module or establish
+a working GPU stack. Do not replace the module or unbind/rebind the device.
+The two quarantine scripts are recovery tools for known unvalidated artifacts;
+they do not install MUSA support.
 
 ## Research archive
 

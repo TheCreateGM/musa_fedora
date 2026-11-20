@@ -12,8 +12,10 @@ a kernel update breaks the module.
 1. Installing a new kernel package runs `dkms autoinstall` from the kernel
    package transaction. DKMS rebuilds `mtgpu` for the new kernel from the
    source in `/usr/src/mtgpu-3.1.0`.
-2. If that build succeeds, the new kernel has a matching `mtgpu.ko`, and the
-   S30 is bound on the next boot exactly as it is now.
+2. If that build succeeds, the new kernel has a matching `mtgpu.ko`. The
+   module is currently blacklisted, so a successful DKMS build does not bind
+   the S30; do not remove the blacklist without the separate display recovery
+   review in [current host status](current-state-2026-11-20.md).
 3. If the build fails, the new kernel still boots. The desktop stays on
    `i915`; the S30 simply has no driver in that kernel. The old kernel keeps
    its module and remains a working fallback.
@@ -23,7 +25,8 @@ produce an unbootable system because of a GPU driver.
 
 The RPM's `%post` scriptlet additionally builds and installs the module for
 the running kernel at package install time. It logs failures but does not
-abort the transaction for the same reason.
+abort the transaction. A built or installed module is not necessarily loaded;
+this host intentionally blocks `mtgpu` to protect the desktop.
 
 ## Inspecting the current state
 

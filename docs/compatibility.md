@@ -1,10 +1,13 @@
 # Moore Threads compatibility assessment
 
 The latest live host evidence is in the
-[current state](current-state-2026-11-17.md). Vendor-support research below was
+[current state](current-state-2026-11-20.md). Vendor-support research below was
 reviewed on 2026-11-12.
 
-## Current host status
+## Historical host status — 2026-11-17 (superseded)
+
+The current host is described in the 2026-11-20 report linked above. The
+loaded-driver and hardware results in this section are historical.
 
 - Fedora Linux 45 Workstation, x86_64, kernel `7.3.3-300.fc45.x86_64`.
 - The MTT S30 is at `0000:01:00.0`, PCI ID `1ed5:0102`, bound to the vendor

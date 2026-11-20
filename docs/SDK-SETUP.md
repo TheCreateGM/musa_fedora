@@ -1,9 +1,11 @@
 # MUSA SDK setup status
 
-A MUSA SDK is in place on this host. The supported runtime is MUSA 1.5.4 at
-`/usr/local/musa/` (`libmusart.so.1.5.4`), and the MUSA 5.2.0 compiler and
-headers are at `/usr/local/musa-5.2/`. The host and test evidence are in the
-[current state](current-state-2026-11-17.md). No SDK from the staged research
+MUSA runtime 1.5.4 is installed at `/usr/local/musa/`
+(`libmusart.so.1.5.4`), and MUSA 5.2.0 compiler/headers are at
+`/usr/local/musa-5.2/`. The current S30 is unbound and the driver is
+blacklisted, so these files do not establish an available GPU runtime. See the
+[live host status](current-state-2026-11-20.md) and historical test record
+([2026-11-17](current-state-2026-11-17.md)). No SDK from the staged research
 package set has been installed into Fedora; the running `/usr/local` trees are
 separate from those staged packages.
 
@@ -52,13 +54,15 @@ stub from runtime search paths.
 
 ## Host safety status
 
-The MTT S30 is bound and the vendor `mtgpu` 3.1.0 driver is live
-(`initstate=live`) with `/dev/mtgpu.0` present. MUSA runtime 1.5.4 detects
-the device and the hardware tests above pass. The separate 5.2.0 *runtime* is
+The latest live inventory finds the MTT S30 unbound, with no `/dev/mtgpu.0`;
+`/etc/modprobe.d/blacklist-mtgpu.conf` remains in place after prior DRM/KMS
+crashes. MUSA 1.5.4 and the 5.2.0 compiler were tested on hardware in a prior
+boot only. The separate 5.2.0 *runtime* is
 not compatible with the 3.1.0 driver ABI (`sizeof(struct musaDeviceProp)` is
 728 bytes in 1.5.4 vs 1032 in 5.2.0) and must not be substituted for 1.5.4.
 
-Do not install Ubuntu packages directly, install over the live module,
-unbind/rebind the device, or disable IBT/CET. The five Fedora RPM specs
+Do not install Ubuntu packages directly, remove the blacklist, load the
+module, unbind/rebind the device, or disable IBT/CET without an approved
+recovery plan. The five Fedora RPM specs
 (`mtgpu-dkms`, `mtgpu-firmware`, `musa-runtime`, `musa-sdk`, `musa-toolkit`)
 describe the intended packaging but are not the running stack.

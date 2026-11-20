@@ -1,6 +1,6 @@
 # Official driver porting record
 
-## Current active source/build (2026-11-17)
+## Active source/build record (2026-11-17; host status superseded)
 
 The active project `Makefile`, `inc/`, and `src/` identify as S30 driver
 package version 3.1.0. The separate `driver-mtgpu-5.2.0/` source tree is not
@@ -11,13 +11,15 @@ the vendor core object to SHA-256
 
 The 2026-11-13 isolated build linked for kernel 7.3.3 with matching vermagic
 and the S30 PCI alias, emitting 5,504 compiler/objtool warning lines; that
-isolated artifact is not approved for installation as a replacement. A 3.1.0
-module is now installed at
-`/lib/modules/7.3.3-300.fc45.x86_64/extra/mtgpu.ko` and is loaded and live on
-this host, with the S30 bound and the expanded compute/Vulkan tests passing (see the
-[current state](current-state-2026-11-17.md)). Do not install over the live
-module or unbind/rebind the device; the opaque vendor core still carries
-objtool/ENDBR warnings, so do not disable IBT/CET.
+isolated artifact is not approved for installation as a replacement. The
+2026-11-17 report documented a 3.1.0 module live at
+`/lib/modules/7.3.3-300.fc45.x86_64/extra/mtgpu.ko` with historical S30 tests
+passing (see [that dated state](current-state-2026-11-17.md)). The latest
+2026-11-20 inventory instead finds the card unbound and the module intentionally
+blacklisted after DRM/KMS crashes; see
+[current live status](current-state-2026-11-20.md). Do not remove the blacklist,
+load, or unbind/rebind the device as an ad-hoc test. The opaque vendor core
+still carries objtool/ENDBR warnings; do not disable IBT/CET.
 
 ## Previous current-kernel build (2026-11-12)
 

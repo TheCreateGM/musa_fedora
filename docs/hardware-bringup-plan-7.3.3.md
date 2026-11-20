@@ -1,8 +1,12 @@
 # MTT S30 hardware validation status
 
-Hardware bring-up has succeeded on this host. The vendor `mtgpu` 3.1.0 driver
-is loaded and live (`initstate=live`) with the MTT S30 bound at
-`0000:01:00.0` (`1ed5:0102`), and a hardware-verified MUSA path exists
+Hardware bring-up succeeded in a prior host state, but is not currently
+available. The latest inventory (2026-11-20) finds the MTT S30 unbound and
+`mtgpu` blacklisted to protect the Intel-driven desktop after prior DRM/KMS
+crashes. Historical hardware tests remain recorded below; they do not describe
+the current boot. See [current live status](current-state-2026-11-20.md).
+The vendor `mtgpu` 3.1.0 driver was previously loaded and live (`initstate=live`)
+with the MTT S30 bound at `0000:01:00.0` (`1ed5:0102`), and a hardware-verified MUSA path exists
 (device discovery, vendor copy test, host runtime API, eight compute
 operations, vector-add, and a limited headless Vulkan path). The `mtgpu` build still contains an opaque vendor core
 object with unresolved objtool/ENDBR warnings, so do not disable IBT/CET,
@@ -14,7 +18,7 @@ or load modules. The revert helper only removes a persistent `ibt=off`
 argument from the explicitly selected kernel entry, after verifying the entry
 and rechecking the result.
 
-## Live host state (2026-11-17)
+## Historical host state (2026-11-17; superseded)
 
 See the [current state](current-state-2026-11-17.md). The host runs Fedora 45
 kernel `7.3.3-300.fc45.x86_64`; the S30 is bound to `mtgpu` 3.1.0 and

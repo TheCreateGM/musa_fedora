@@ -1,19 +1,21 @@
 # Userspace / runtime reconciliation
 
-Reviewed 2026-11-17. Current host state is recorded in the
-[current state](current-state-2026-11-17.md). The host runs kernel 7.3.3 with
-the vendor `mtgpu` 3.1.0 driver live and the MTT S30 bound. MUSA runtime 1.5.4
-at `/usr/local/musa/` detects the S30 and passes the vendor copy test; the
-host runtime API (`tests/musart-smoke.c`) passes; and a 5.2.0 `mcc` `mp_10`
-vector-add ran on the S30. The Intel UHD 770 remains the display GPU.
+Reviewed 2026-11-17; host state was rechecked on 2026-11-20. The current
+inventory is in [current state](current-state-2026-11-20.md); the host runs
+kernel 7.3.4 with the S30 unbound and `mtgpu` blacklisted after prior
+DRM/KMS crashes. MUSA runtime 1.5.4 and compiler packages are installed, but
+no runtime API or GPU workload was tested in this boot. The hardware results
+below are historical tests from when the module was already live. The Intel
+UHD 770 remains the display GPU.
 
 ## Verified runtime
 
 The supported userspace runtime on this host is MUSA 1.5.4 at
 `/usr/local/musa/` (`libmusart.so.1.5.4`). It ships its own
 `musa_runtime.h` under `/usr/local/musa/include`; compile host code against
-those headers, not the 5.2.0 SDK headers. `/dev/mtgpu.0` and the S30 render
-node `/dev/dri/renderD129` are present.
+those headers, not the 5.2.0 SDK headers. The runtime files are installed, but
+`/dev/mtgpu.0` and an S30 render node are currently absent because the driver
+is blacklisted and the S30 unbound.
 
 ## Host-local SDK tree
 
@@ -50,10 +52,11 @@ See the
 
 ## Safety status
 
-The current host runs kernel `7.3.3-300.fc45.x86_64` with the `mtgpu` 3.1.0
-module live and the S30 bound. Do not install over the live module, unbind or
-rebind the device, replace files under `/usr/local`, or alter system library
-paths on a running stack. The unvalidated installer, DKMS hooks, udev rule,
+The current host runs kernel `7.3.4-300.fc45.x86_64` with the S30 unbound
+and the `mtgpu` blacklist active. Do not remove the blacklist, load, unbind, or
+rebind the device; prior driver loads caused GNOME/KMS crashes and rebind
+caused a vendor-core fault. Do not replace files under `/usr/local` or alter
+system library paths. The unvalidated installer, DKMS hooks, udev rule,
 and blob-rewrite helper are archived under
 `musa-data/research/disabled-deployment-drafts-2026-11-11/`; do not execute
 them. No installation or rollback procedure is approved.

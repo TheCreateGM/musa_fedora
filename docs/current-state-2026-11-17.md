@@ -1,9 +1,11 @@
-# MUSA on Fedora — Current state (2026-11-17)
+# MUSA on Fedora — Historical state (2026-11-17)
 
-This report supersedes the 2026-11-13 host snapshots and the packaging
-assessment in `docs/current-state-2026-11-16.md`. It records the live host
-check and Copr builds completed on 2026-11-17. It does not claim features that
-were not exercised.
+This report records the live host check and Copr builds completed on
+2026-11-17. It is superseded for current host status by
+[`current-state-2026-11-20.md`](current-state-2026-11-20.md): the S30 is now
+unbound and `mtgpu` is intentionally blacklisted after display/driver faults.
+The hardware tests and Copr results below are retained as dated evidence only;
+they do not describe current GPU availability or establish untested features.
 
 ## Host and hardware
 

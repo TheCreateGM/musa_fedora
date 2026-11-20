@@ -1,10 +1,16 @@
-# Clean-boot resume plan — MTT S30 GPU validation (2026-11-17)
+# Historical clean-boot resume plan — MTT S30 (2026-11-17)
 
-This is the reviewed plan for resuming real-hardware validation of the MTT S30
-stack after the kernel fault logged earlier today. It defines the reboot
-procedure, the post-boot pre-flight checks, the GPU test scope, the abort
-criteria, and the recovery actions. Follow it as written; do not widen the GPU
-test scope without a new review.
+> **Do not follow this plan on the current host.** It predates the intentional
+> `/etc/modprobe.d/blacklist-mtgpu.conf` safety block and the later documented
+> GNOME/KMS crashes during driver loading. The current S30 is unbound and the
+> module must not be loaded or unbound/rebound ad hoc. See
+> [`current-state-2026-11-20.md`](current-state-2026-11-20.md) and
+> [`driver-loading.md`](driver-loading.md). A new attempt requires a reviewed
+> display rollback and a vendor-core/IBT recovery plan.
+
+This dated plan is retained as historical context for the 2026-11-17 OpenCL
+kernel fault only. Its reboot and GPU-test steps are not approval for current
+hardware validation.
 
 ## Why a reboot is required
 

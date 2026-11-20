@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # build-all.sh — build every spec in packaging/rpm/SPECS locally.
 #
-# Builds the hardware-validated MTT S30 stack:
+# Builds the historically exercised MTT S30 package set. Current Fedora
+# driver loading remains blocked pending safe vendor-core validation:
 #   mtgpu-dkms 3.1.0, mtgpu-firmware 3.1.0, musa-runtime 1.5.4,
 #   musa-sdk 5.2.0 (compiler only), musa-toolkit 3.1.0 (metapackage).
 #

@@ -33,7 +33,7 @@ echo "Loading $MODULE on kernel $KERNEL ..."
 # Extra arguments are appended verbatim, e.g.:
 #   ./scripts/load-driver-manual.sh mtgpu_sched_mode=0
 timeout 180 pkexec /usr/sbin/insmod "$MODULE" \
-    mtgpu_drm_major=2 rm_feature_level=1 "$@"
+    display=none disable_fbdev=1 mtgpu_drm_major=2 "$@"
 
 rc=$?
 echo "insmod rc=$rc"

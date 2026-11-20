@@ -92,6 +92,67 @@ package builds as succeeded:
 | `musa-sdk` | `5.2.0-6` | [11339529](https://copr.fedorainfracloud.org/coprs/build/11339529) | succeeded: Fedora 44, 45, ELN, Rawhide x86_64 |
 | `musa-toolkit` | `3.1.0-1` | [11339164](https://copr.fedorainfracloud.org/coprs/build/11339164) | succeeded: Fedora 44, 45, ELN, Rawhide x86_64 |
 
+Firmware and toolkit were re-released later on 2026-11-20:
+
+| Package | Version-release | Copr build | Result/chroots |
+|---|---:|---:|---|
+| `musa-toolkit` | `3.1.0-2` (intermediate) | [11365810](https://copr.fedorainfracloud.org/coprs/build/11365810) | succeeded: Fedora 44, 45, ELN, Rawhide x86_64 |
+| `mtgpu-firmware` | `3.1.0-3` (intermediate) | [11365821](https://copr.fedorainfracloud.org/coprs/build/11365821) | succeeded: Fedora 44, 45, ELN, Rawhide x86_64 |
+| `musa-toolkit` | `3.1.0-3` | [11365857](https://copr.fedorainfracloud.org/coprs/build/11365857) | succeeded: Fedora 44, 45, ELN, Rawhide x86_64 |
+| `mtgpu-firmware` | `3.1.0-4` | [11365858](https://copr.fedorainfracloud.org/coprs/build/11365858) | succeeded: Fedora 44, 45, ELN, Rawhide x86_64 |
+
+The firmware release 3.1.0-4 moves the payload from `/lib/firmware/mthreads` to
+`/usr/lib/firmware/mthreads` (matching Fedora's linux-firmware usr-merge
+layout and letting the buildroot `brp-linkdupes` pass process `/usr`), makes
+the package `ExclusiveArch: x86_64` instead of `noarch` (the blobs are GPU ISA
+ELF images, not host-arch-independent files), and disables the host `strip`
+BRP passes so the opaque GPU ELF firmware bytes stay untouched. The toolkit
+release 3.1.0-3 keeps a non-empty buildroot `/usr` for the `brp-linkdupes`
+pass and rewords its description as historically exercised rather than
+currently hardware-validated.
+
+The second configured project, `axogm/musa-mtt-s30`, was rebuilt to cover its
+additional Fedora 43 chroot. All four builds succeeded across Fedora 43, 44,
+45, ELN, and Rawhide x86_64:
+
+- [`musa-toolkit` 3.1.0-2 (intermediate), build 11365809](https://copr.fedorainfracloud.org/coprs/build/11365809)
+- [`mtgpu-firmware` 3.1.0-3 (intermediate), build 11365820](https://copr.fedorainfracloud.org/coprs/build/11365820)
+- [`musa-toolkit` 3.1.0-3, build 11365856](https://copr.fedorainfracloud.org/coprs/build/11365856)
+- [`mtgpu-firmware` 3.1.0-4, build 11365859](https://copr.fedorainfracloud.org/coprs/build/11365859)
+
+## Firmware/toolkit build log and package verification (2026-11-20)
+
+The final builds were inspected in full:
+
+- The `mtgpu-firmware` 3.1.0-4 `builder-live.log` for Fedora 45 and Rawhide and
+  the `musa-mtt-s30` Fedora 43 build 11365859 each show
+  `Wrote: /builddir/build/RPMS/mtgpu-firmware-3.1.0-<dist>.x86_64.rpm` with
+  child return code 0; the only case-insensitive `error` hits are dnf package
+  names (`libgpg-error`). The `brp-linkdupes` pass scanned the buildroot
+  `/usr` tree and linked 2 duplicate files (~1.6 MiB saved); no strip pass ran
+  on the firmware blobs.
+- The `musa-toolkit` 3.1.0-3 `builder-live.log` for Fedora 45 shows
+  `Wrote: /builddir/build/RPMS/musa-toolkit-3.1.0-3.fc45.x86_64.rpm`; no fatal
+  errors. The second project's Fedora 43 build 11365856 succeeded the same way.
+- The published Fedora 45 RPMs `mtgpu-firmware-3.1.0-4.fc45.x86_64.rpm` and
+  `musa-toolkit-3.1.0-3.fc45.x86_64.rpm` (the metapackage now defaults to
+  `x86_64`, not `noarch`) were downloaded from the Copr repository and
+  verified with a private `rpmkeys` database (no system keyring change):
+  `digests signatures OK` against the project Copr key
+  `0F9E1B00A8990F19AB661745B21968F295ECB7E4`.
+- The firmware payload is byte-identical to the installed 3.1.0-2 payload:
+  SHA-256 comparison of every file under `mthreads/` matched the host
+  `/lib/firmware/mthreads` tree, confirming the strip-skip change did not
+  alter any blob.
+- `rpmspec -P` passed for both updated specs, and both SRPMs built locally
+  (`mtgpu-firmware-3.1.0-4.fc45.src.rpm`, `musa-toolkit-3.1.0-3.fc45.src.rpm`).
+  One duplicate Copr submission of the firmware SRPM (build 11366194) was made
+  while re-verifying the workflow and was canceled; the same SRPM had already
+  succeeded as 11365858.
+- `scripts/rpm-stack.sh` now expects `mtgpu-firmware` 3.1.0-4 and
+  `musa-toolkit` 3.1.0-3. `scripts/load-driver-manual.sh` loads with
+  `display=none disable_fbdev=1 mtgpu_drm_major=2` (no `rm_feature_level=1`).
+
 Prior intermediate builds for `mtgpu-dkms`:
 - Release 6 failed across chroots due to missing `systemd-rpm-macros` during `%files` macro expansion for `70-mtgpu.rules`.
 - Release 7 ([11365567](https://copr.fedorainfracloud.org/coprs/build/11365567)) resolved buildroot dependencies and succeeded across all 4 chroots.

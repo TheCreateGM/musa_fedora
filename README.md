@@ -35,8 +35,9 @@ recorded, historical 2026-11-17 results, not the current boot state.
 | MUSA compute operations | **verified** | SAXPY, shared reduction, atomics, constant memory, device math, 2D launch, D2D copy, and FP64 passed |
 | Headless Vulkan | **verified, limited** | S30 device/queue, buffer allocation, and host-visible memory map passed; no rendering test |
 | Moore Threads OpenCL | **unavailable** | No MT ICD in the default loader; archived 2.1.1 ICD compute probe caused a kernel Oops (do not use) |
-| Fedora RPM builds | **Copr succeeded** | Copr reports all five intended package builds succeeded for Fedora 44, Fedora 45, ELN, and Rawhide x86_64; current local ignored RPMs are older than the latest specs — see [build status](docs/current-state-2026-11-20.md) |
-| Isolated RPM install + GPU test | **verified** | the five-RPM set installs in a throwaway Fedora 45 container (scriptlets suppressed) and the packaged runtime and `mcc` run on the S30: `13 passed, 0 failed` |
+| Copr package builds | **see live status** | configured targets are Fedora 44/45, ELN, and Rawhide x86_64; the second project adds Fedora 43; build success does not qualify driver loading — see [build status](docs/current-state-2026-11-20.md) |
+| Historical Fedora container + GPU test | **verified** | the 2026-11-17 five-RPM set installed in a throwaway Fedora 45 container and its packaged runtime and `mcc` ran on the S30: `13 passed, 0 failed` |
+| Current Fedora 45 package install + compiler | **compile-only passed** | current Copr RPMs installed in a disposable container with scriptlets disabled; `rpm -V`, `dnf check`, and the packaged compiler/header smoke check passed; no GPU runtime query was made |
 
 Historical verification command on 2026-11-17: `scripts/verify-musa.sh` — **13 passed,
 0 failed, 1 skipped**. It must not be read as a current-host result. The skip is Moore Threads OpenCL: the loader found
@@ -102,12 +103,15 @@ recheck. Do not use the 5.2.0 runtime for S30 execution.
 * The verified host uses the vendor mtgpu 3.1.0 stack and MUSA runtime 1.5.4;
   MUSA 5.2.0 is used only for its compiler/headers. The 5.2 runtime is not
   compatible with this 3.1.0 driver ABI; do not substitute it for runtime 1.5.4.
-* The installed package set is `mtgpu-dkms` 3.1.0-5, `mtgpu-firmware` 3.1.0-2,
+* The host-installed package set is `mtgpu-dkms` 3.1.0-7,
+  `mtgpu-firmware` 3.1.0-2,
   `musa-runtime` 1.5.4-3, `musa-sdk` 5.2.0-6, and `musa-toolkit` 3.1.0-1.
-  The latest Copr API check reported all five builds succeeded in Fedora 44,
-  Fedora 45, ELN, and Rawhide x86_64. This environment's ignored local RPMs
-  predate the latest spec releases; see the dated build numbers in
-  [live status](docs/current-state-2026-11-20.md).
+  The host deliberately stays on these releases until the driver-loading
+  maintenance plan is approved; current Copr releases (`mtgpu-firmware`
+  3.1.0-4, `musa-toolkit` 3.1.0-3) are verified builds only.
+  Current spec releases, Copr build states, target chroots, and known compiler
+  warnings are recorded in the [live status](docs/current-state-2026-11-20.md);
+  successful builds do not imply current GPU functionality.
 * A Fedora 45 container test and packaged compiler/runtime test on the physical
   S30 passed on 2026-11-17, with scriptlets suppressed. This is historical
   evidence from a prior loaded-driver state, not a test of the current boot.

@@ -31,6 +31,16 @@ succeeded on Fedora 44, 45, ELN, Rawhide x86_64) shipping the corrected
 and removing an unsupported claim that a GNU IBT property note establishes
 safe runtime behavior. The host still has release 7 installed and the S30
 remains unbound/blacklisted; releases 8 and 9 were not installed on the host.
+`mtgpu-firmware` was later re-released as `3.1.0-4` (Copr builds
+[11365858](https://copr.fedorainfracloud.org/coprs/build/11365858) primary and
+[11365859](https://copr.fedorainfracloud.org/coprs/build/11365859) second
+project): `/usr/lib/firmware` usr-merge layout, `x86_64`-only packaging, and
+no strip pass on GPU ELF blobs — the published payload is byte-identical to
+the installed 3.1.0-2 blobs. `musa-toolkit` was re-released as `3.1.0-3`
+(Copr builds [11365857](https://copr.fedorainfracloud.org/coprs/build/11365857)
+and [11365856](https://copr.fedorainfracloud.org/coprs/build/11365856)) with
+an honest, historical-results-only description. Both RPMs verified
+`digests signatures OK` against the project Copr key.
 See [`docs/current-state-2026-11-20.md`](docs/current-state-2026-11-20.md) and
 [`docs/root-cause-rm-feature-level-2026-11-20.md`](docs/root-cause-rm-feature-level-2026-11-20.md).
 

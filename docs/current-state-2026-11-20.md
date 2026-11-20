@@ -227,11 +227,14 @@ working MUSA GPU path.
 
 ## Required next step
 
-The next hardware attempt needs a separately reviewed maintenance/recovery
-plan that addresses the documented GNOME/KMS conflict, IBT/objtool warnings,
-opaque vendor-core faults, and the historical rebind failure. It must preserve
-Intel display operation and a bootable rollback path. Until those issues are
-resolved and an approved module can be safely probed on hardware, S30 GPU tests
-must remain blocked. Consult Moore Threads for a supported Fedora/Intel/S30
-driver/runtime/firmware combination or a corrected driver/core before
-proceeding.
+A draft maintenance/recovery plan is now checked in as
+[`maintenance-plan-mtgpu-load-2026-11-20.md`](maintenance-plan-mtgpu-load-2026-11-20.md).
+It is **not approved and not executed**; it requires explicit review before
+any load attempt. It addresses the documented GNOME/KMS conflict (headless
+mode + intact blacklist for normal boots), the IBT/objtool warnings (optional
+one-shot `ibt=off` boot mode, Mode B), the opaque vendor-core faults (no
+`rm_feature_level=1`, single load per boot, no unbind/rebind, abort on any
+Oops), and preserves an Intel display plus a bootable rescue rollback path.
+Until the plan is approved and executed, S30 GPU tests remain blocked.
+Consult Moore Threads for a supported Fedora/Intel/S30 driver/runtime/firmware
+combination or a corrected driver/core before proceeding.

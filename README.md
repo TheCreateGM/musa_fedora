@@ -139,7 +139,10 @@ recheck. Do not use the 5.2.0 runtime for S30 execution.
   blacklisted to protect the Intel-driven GNOME desktop after prior KMS
   crashes. No current-boot GPU test ran. See
   [the live inventory](docs/current-state-2026-11-20.md). Do not remove the
-  blacklist or load/unbind/rebind the driver without a reviewed recovery plan.
+  blacklist or load/unbind/rebind the driver without a reviewed recovery plan;
+  the draft plan is
+  [docs/maintenance-plan-mtgpu-load-2026-11-20.md](docs/maintenance-plan-mtgpu-load-2026-11-20.md)
+  and is not approved for execution yet.
 * The older boot that logged an `mtgpu` kernel fault during the archived OpenCL
   experiment also must not be used for GPU workloads. The reviewed procedure to
   resume hardware validation after a clean reboot is in

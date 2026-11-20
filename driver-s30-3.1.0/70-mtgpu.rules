@@ -1,0 +1,3 @@
+# Moore Threads mtgpu compute nodes: allow the active seat to open them.
+KERNEL=="musa*", MODE="0666", TAG+="uaccess"
+KERNEL=="mtgpu*", MODE="0666", TAG+="uaccess"

@@ -4,10 +4,22 @@
 set -euo pipefail
 
 KERNEL="$(uname -r)"
-MODULE="/lib/modules/${KERNEL}/extra/mtgpu.ko"
+# Fedora DKMS installs the module compressed (mtgpu.ko.xz); older trees
+# carried an uncompressed mtgpu.ko. The kernel has
+# CONFIG_MODULE_DECOMPRESS=y, so insmod accepts the compressed file directly.
+MODULE=""
+for candidate in \
+    "/lib/modules/${KERNEL}/extra/mtgpu.ko" \
+    "/lib/modules/${KERNEL}/extra/mtgpu.ko.xz" \
+    "/lib/modules/${KERNEL}/extra/mtgpu.ko.zst"; do
+    if [[ -f "$candidate" ]]; then
+        MODULE="$candidate"
+        break
+    fi
+done
 
-if [[ ! -f "$MODULE" ]]; then
-    echo "ERROR: module not found: $MODULE" >&2
+if [[ -z "$MODULE" ]]; then
+    echo "ERROR: no mtgpu module found for kernel $KERNEL" >&2
     exit 1
 fi
 

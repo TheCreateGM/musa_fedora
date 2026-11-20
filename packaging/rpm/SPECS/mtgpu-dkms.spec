@@ -2,7 +2,7 @@
 
 Name:           mtgpu-dkms
 Version:        3.1.0
-Release:        5%{?dist}
+Release:        6%{?dist}
 Summary:        DKMS kernel driver source for Moore Threads GPUs (mtgpu)
 
 License:        GPL-2.0-only
@@ -48,6 +48,13 @@ After installation the module is built immediately for the running kernel. Load
 it with:
 
     modprobe mtgpu
+
+This package ships /etc/modprobe.d/90-mtgpu-headless.conf, which defaults the
+driver to headless compute mode (`display=none disable_fbdev=1`): the S30 is
+used for compute and does not register KMS connectors or an fbdev, so a
+desktop already driven by i915/amdgpu is left untouched. Users who want the
+S30 to drive its own DP/HDMI outputs should switch that file to
+`display=mt`.
 
 Firmware is provided by mtgpu-firmware; install it first, otherwise the driver
 probes but cannot bring the GPU up. With Secure Boot enabled the DKMS MOK must
@@ -102,10 +109,16 @@ find %{buildroot}/usr/src/mtgpu-%{version} \
        -o -name 'Module.symvers' \) \
     -delete 2>/dev/null || true
 
+install -D -m 0644 90-mtgpu-headless.conf \
+    %{buildroot}%{_sysconfdir}/modprobe.d/90-mtgpu-headless.conf
+install -D -m 0644 70-mtgpu.rules %{buildroot}%{_udevrulesdir}/70-mtgpu.rules
+
 %files
 %defattr(-,root,root,-)
 %doc README.md
 /usr/src/mtgpu-%{version}/
+%config(noreplace) %{_sysconfdir}/modprobe.d/90-mtgpu-headless.conf
+%{_udevrulesdir}/70-mtgpu.rules
 
 %post
 # Register, build and install for the running kernel. Failures are reported but
@@ -128,6 +141,20 @@ fi
 depmod -a >/dev/null 2>&1 || :
 
 %changelog
+* Fri Nov 20 2026 MUSA Fedora Team <musa@fedoraproject.org> - 3.1.0-6
+- The DISPC register window is absent from the component match in headless
+  modes (display=none/display=dummy) because the DP/DC components are then
+  skipped. inc/s30_vpu_compat.h rejected that layout (-ERANGE), so the VPU
+  component bind failed, the whole DRM device aborted and the MUSA runtime
+  found no render node (musaInfo "CreatePlatform failed", mthreads-gmi
+  segfault). Derive the 0x116000 boundary from the pinned layout when no
+  "dispc-regs" resource exists; the display=mt path is unchanged.
+- Ship /etc/modprobe.d/90-mtgpu-headless.conf (display=none, disable_fbdev=1,
+  rm_feature_level=1). Headless is the safe default on a Fedora desktop whose
+  monitor hangs off i915/amdgpu, and it removes the historical KMS collision.
+- Ship the udev rules for the musa*/mtgpu* compute nodes; they existed on the
+  test host but were owned by no package.
+
 * Tue Nov 17 2026 MUSA Fedora Team <musa@fedoraproject.org> - 3.1.0-5
 - Use the DRM fbdev helper's new public header path on Linux 7.4 and newer.
   Upstream moved the helper into the DRM client library and renamed its header

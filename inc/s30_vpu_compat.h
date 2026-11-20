@@ -23,8 +23,20 @@ static int mtgpu_s30_vpu_map_size(const struct mt_conf *conf,
 	for (i = 0; i < conf->core_size; i++)
 		if (conf->regs_core_size[i] != 0x4000)
 			return -EINVAL;
-	if (bar_size < conf->regs_base || end > bar_size - conf->regs_base ||
-	    display_offset != 0x116000 ||
+	if (bar_size < conf->regs_base || end > bar_size - conf->regs_base)
+		return -ERANGE;
+	/*
+	 * The DISPC component is only instantiated when the display side of the
+	 * driver is enabled (display=mt). In the headless modes (display=none,
+	 * display=dummy) mtdev->disp_cnt is zero and no "dispc-regs" resource
+	 * exists, so derive the boundary from the hardware layout instead of
+	 * rejecting the VPU mapping. The window stays 0x108000..0x116000 and the
+	 * DISPC page is still excluded; the register layout check above already
+	 * pinned regs_base to 0x108000 and end to 0xe000.
+	 */
+	if (display_offset == ~0ULL)
+		display_offset = (u64)conf->regs_base + end;
+	if (display_offset != 0x116000 ||
 	    (u64)conf->regs_base + end > display_offset)
 		return -ERANGE;
 	*size = end;

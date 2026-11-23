@@ -6,7 +6,13 @@ BDF="0000:01:00.0"
 DEVICE="/sys/bus/pci/devices/$BDF"
 MUSA_PATH="${MUSA_PATH:-/usr/local/musa-5.2}"
 MCC="$MUSA_PATH/bin/mcc"
-MUSA_INFO="$MUSA_PATH/bin/musaInfo"
+# The runtime musaInfo (1.5.4) answers the device query correctly.
+# The SDK 5.2.0 musaInfo aborts (EINVAL / libdrm-mt refcount) when it
+# links libmusart.so.5, so prefer the runtime tool.
+MUSA_INFO="/usr/local/musa/bin/musaInfo"
+if [[ ! -x "$MUSA_INFO" ]]; then
+    MUSA_INFO="$MUSA_PATH/bin/musaInfo"
+fi
 TEST_SOURCE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../tests" && pwd)/musa_vector_add.mu"
 BLOCKERS=()
 RENDER_NODE=""
@@ -93,7 +99,9 @@ echo "Driver module: ${MODULE_PATH##*/}"
 
 TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/musa-s30-runtime.XXXXXX")"
 trap 'rm -rf -- "$TMP_DIR"' EXIT
-export LD_LIBRARY_PATH="$MUSA_PATH/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+# The runtime (1.5.4) lives in /usr/local/musa; the SDK (5.2.0) in
+# /usr/local/musa-5.2.  Both provide libmusart at runtime for the smoke test.
+export LD_LIBRARY_PATH="/usr/local/musa/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
 echo
 echo "Querying the MUSA runtime for the device..."

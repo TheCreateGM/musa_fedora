@@ -13,9 +13,30 @@ scripts only ran userspace test binaries against the already-live driver.
 - Fedora Linux 45 (Workstation), kernel `7.3.4-300.fc45.x86_64` (`CONFIG_X86_KERNEL_IBT=y`, IBT not disabled)
 - MTT S30 `0000:01:00.0` (`1ed5:0102`), bound to `mtgpu` 3.1.0 (`b0e8209-dirty` build), `/dev/mtgpu.0`, render node `renderD129`
 - Installed packages: `musa-runtime 1.5.4-4`, `musa-sdk 5.2.0-6`, `musa-toolkit 3.1.0-3`, `mtgpu-dkms 3.1.0-11` (module live from the approved load), `mtgpu-firmware 3.1.0-4`
-- Boot kernel journal before the run: clean (no Oops/BUG/NULL dereference; the only `mtgpu` log line is the cosmetic IRQ-affinity message)
+- Before the 08:39 validation there had been no kernel Oops/BUG/NULL dereference, but the boot had two known userspace ABI-mismatch aborts and corresponding `mtgpu Invalid cmd_type` messages (details below). The successful run used only the compatible 1.5.4 runtime.
 
-## Commands and results (all PASS)
+## Earlier wrong-runtime failures and correction
+
+This boot recorded two failures before the successful 08:39 run:
+
+- 08:04 UTC: `/usr/local/musa-5.2/bin/musaInfo` aborted with SIGABRT while
+  calling `musaGetDeviceCount()` through `libmusart.so.5`; the kernel logged
+  `Invalid cmd_type: 1 or cmd: 12` at the same time.
+- 08:30 UTC: the temporary `vector_add` executable aborted in `musaMalloc()`
+  through `libmusart.so.5`, again with `Invalid cmd_type: 1 or cmd: 12` in the
+  kernel log. `coredumpctl` identified the failing executable under
+  `/tmp/musa-s30-runtime.*`.
+
+Both failures used the MUSA 5.2.0 runtime ABI (`libmusart.so.5`) with the
+3.1.0 driver; the supported runtime is MUSA 1.5.4 (`libmusart.so.1.5`). There
+was no kernel Oops/BUG and GNOME/GDM remained active. The smoke-test link path
+was corrected to use the 1.5.4 runtime library and an explicit `mp_10` target;
+a compile-only check confirmed `DT_NEEDED=libmusart.so.1.5`. The subsequent
+hardware checks below used that compatible ABI and passed. The smoke test now
+fails closed on an incorrect SONAME, and it blocks when the current boot journal
+contains this driver error. Do not repeat the failed 5.2.0-runtime invocation.
+
+## Commands and results (all PASS; after the correction)
 
 ### 1. Reproducible test-binary build (isolated, compile+link only)
 

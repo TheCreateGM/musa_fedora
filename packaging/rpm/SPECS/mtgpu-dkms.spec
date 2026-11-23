@@ -178,8 +178,13 @@ depmod -a >/dev/null 2>&1 || :
 * Mon Nov 23 2026 MUSA Fedora Team <musa@fedoraproject.org> - 3.1.0-12
 - Ship a tmpfiles.d entry creating /var/log/mtgpu and /var/log/mtgpu/event_report,
   and create them in %post. The mtgpu module writes event reports and FEC debug
-  files there and logged ENOENT warnings at every load when the directory was
-  absent (observed 2026-11-23 on the S30 host, kernel 7.3.4).
+  files there (strings in the vendor core blob) and logs a warning at load when
+  it cannot create its event_report tree. Scope note: on the 2026-11-23 S30 host
+  these directories already existed (stale 2026-11-19 state, event_report UUID
+  subdirectory with non-searchable mode) and the module still logged the same
+  warnings, so this entry only guarantees the directories exist on fresh
+  installs; it does not fix the vendor-core event_report failure itself.
+  The warning is cosmetic: the full GPU workload passed with it present.
 
 * Fri Nov 20 2026 MUSA Fedora Team <musa@fedoraproject.org> - 3.1.0-11
 - Disable the rpmbuild BRP strip hooks. Releases 6 through 9 silently

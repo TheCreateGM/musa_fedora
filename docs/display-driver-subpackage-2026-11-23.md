@@ -39,8 +39,19 @@ enabled x86_64 chroot:
 | `axogm/musa-fedora` | fedora-44, fedora-45, fedora-eln, fedora-rawhide | 11377974 |
 | `axogm/musa-mtt-s30` | fedora-43, fedora-44, fedora-45, fedora-eln, fedora-rawhide | 11377976 |
 
-Build status must be verified per chroot before the packages are used. A
-successful build only proves that the RPMs are produced; it does not prove
+Both builds were watched to completion and reported `succeeded`. The per-chroot
+`results.json` files were fetched from the COPR download server and every
+chroot lists both `musa-runtime` and `musa-runtime-display`:
+
+| Chroot | 11377974 (`musa-fedora`) | 11377976 (`musa-mtt-s30`) |
+|---|---|---|
+| fedora-43-x86_64 | — | succeeded, both RPMs |
+| fedora-44-x86_64 | succeeded, both RPMs | succeeded, both RPMs |
+| fedora-45-x86_64 | succeeded, both RPMs | succeeded, both RPMs |
+| fedora-eln-x86_64 | succeeded, both RPMs | succeeded, both RPMs |
+| fedora-rawhide-x86_64 | succeeded, both RPMs | succeeded, both RPMs |
+
+A successful build only proves that the RPMs are produced; it does not prove
 that the driver is safe to load or that the desktop survives a load.
 
 ## Verification still required

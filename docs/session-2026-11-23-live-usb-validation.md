@@ -67,8 +67,21 @@ and `axogm/musa-mtt-s30` (Fedora 43/44/45/ELN/Rawhide).
 | `musa-sdk` 5.2.0-6 | 11377875 | 11377881 |
 | `musa-toolkit` 3.1.0-3 | 11377876 | 11377882 |
 
-Final per-build and per-chroot results are recorded below after the builds and
-log inspection complete.
+**Final result: all ten builds `succeeded`** (per-build `copr-cli status`), and
+the monitor downloaded the build logs for inspection. Per-chroot success
+markers were collected in `/home/axogm/.musa-work/copr-logs/`. This is a
+**build** result only; it does not qualify driver loading or GPU execution.
+
+## Installed-system disk boot repair
+
+Separately from the packaging work, the installed system's journal was
+examined because the host was still being booted from the USB stick. GNOME
+Shell was segfaulting in its KMS thread because the `mtgpu` blacklist had been
+renamed to `.bak` while the driver auto-loaded after switch-root. The
+blacklist was restored, a stale boot entry retired, and EFI boot order changed
+to put the installed Fedora first. Full evidence, backups, verification and
+rollback instructions are in [boot-fix-2026-11-23.md](boot-fix-2026-11-23.md).
+An actual reboot from disk is still pending user action (remove the USB stick).
 
 ## Publishing state
 

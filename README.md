@@ -6,6 +6,8 @@ MUSA driver/runtime packaging and test sources for the **Moore Threads MTT S30**
 See the [latest live recheck](docs/live-host-recheck-2026-11-20-session-1549.md),
 the [full host status](docs/current-state-2026-11-20.md), and the
 [2026-11-23 Live USB validation/build report](docs/session-2026-11-23-live-usb-validation.md).
+For the repair of the installed system's disk boot (GDM crash caused by an
+auto-loaded `mtgpu`), see [the 2026-11-23 boot fix](docs/boot-fix-2026-11-23.md).
 
 The project targets the vendor's own S30 stack — **mtgpu driver 3.1.0** plus
 **MUSA runtime 1.5.4** from `musa_3.1.0-pc_x86.deb` — and codes kernels with the

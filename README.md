@@ -12,10 +12,14 @@ auto-loaded `mtgpu`), see [the 2026-11-23 boot fix](docs/boot-fix-2026-11-23.md)
 A controlled load test on the installed system on 2026-11-23 ran the full MUSA
 workload successfully on the S30; see the
 [2026-11-23 load-test evidence](docs/hardware-validation-2026-11-23-load-test.md).
-That test did not change the boot-time blacklist and does not enable compute on
-a normal boot. To avoid the Mesa/GNOME crash seen there, the vendor display
-drivers now live in an opt-in `musa-runtime-display` subpackage; see the
+That test did not change the boot-time blacklist. To avoid the Mesa/GNOME
+crash seen there, the vendor display drivers now live in an opt-in
+`musa-runtime-display` subpackage; see the
 [display-driver split](docs/display-driver-subpackage-2026-11-23.md).
+The controlled load has since been repeated with `musa-runtime` 1.5.4-4 (the
+version without the Mesa DRI drivers): **every functional step passed, GNOME
+survived the load, and no kernel fault was logged** — see
+[the 1.5.4-4 load-test evidence](docs/hardware-validation-2026-11-23-runtime154-load-test.md).
 
 ### Updates — 2026-11-23 (session)
 
@@ -39,11 +43,16 @@ drivers now live in an opt-in `musa-runtime-display` subpackage; see the
   preflight guards, backups and a restore path, and
   [`docs/compute-mode.md`](docs/compute-mode.md) explains the workflow, the
   evidence behind it and the limits.
-- **Open:** the controlled load test has not yet been repeated with
-  `musa-runtime 1.5.4-4` installed (the version without the Mesa DRI
-  drivers). That repetition needs root privileges on this host, which require
-  interactive polkit approval, and it is what turns the crash fix into a
-  verified claim. Until it is done, the boot-time block stays in place.
+- **Resolved:** the controlled load test was repeated on 2026-11-23 07:38 UTC
+  with `musa-runtime 1.5.4-4` installed. All steps passed (telemetry,
+  `musaInfo`, `muMemcpyTest`, runtime API, `mp_10` vector-add/compute/fp64,
+  headless Vulkan), GNOME/GDM survived the load, and no kernel fault was
+  logged. This verifies that the Mesa/GNOME crash was caused by the packaged
+  vendor DRI drivers and that 1.5.4-4 fixes it; see
+  [the 1.5.4-4 load-test evidence](docs/hardware-validation-2026-11-23-runtime154-load-test.md).
+  The boot-time block was still in place during that run; removing it
+  permanently via `compute-mode.sh enable` remains a separate, explicitly
+  approved change.
 
 The project targets the vendor's own S30 stack — **mtgpu driver 3.1.0** plus
 **MUSA runtime 1.5.4** from `musa_3.1.0-pc_x86.deb` — and codes kernels with the

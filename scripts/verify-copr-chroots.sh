@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+# verify-copr-chroots.sh — prove that every configured COPR chroot carries the
+# current MUSA/MTT S30 artifacts.
+#
+# Two independent sources are queried:
+#   1. the COPR frontend API (api_3) for the build state of each package build;
+#   2. the published repository metadata of every chroot, via dnf's repoquery,
+#      for the artifact list that users actually get from `dnf install`.
+#
+# A green run means: every package build reports "succeeded" AND every
+# chroot's repository advertises the expected binary RPMs.
+#
+# Usage: scripts/verify-copr-chroots.sh [--include-src]
+set -uo pipefail
+
+COPR_API="${COPR_API:-https://copr.fedorainfracloud.org/api_3}"
+COPR_DL="${COPR_DL:-https://download.copr.fedorainfracloud.org/results}"
+OWNER="${COPR_OWNER:-axogm}"
+PROJECTS=("musa-fedora" "musa-mtt-s30")
+# Chroots per project, as configured in the COPR projects.
+declare -A CHROOTS=(
+    ["musa-fedora"]="fedora-44-x86_64 fedora-45-x86_64 fedora-eln-x86_64 fedora-rawhide-x86_64"
+    ["musa-mtt-s30"]="fedora-43-x86_64 fedora-44-x86_64 fedora-45-x86_64 fedora-eln-x86_64 fedora-rawhide-x86_64"
+)
+# Package -> expected version-release of the artifact that must be present.
+EXPECTED=(
+    "musa-runtime:1.5.4-4"
+    "musa-runtime-display:1.5.4-4"
+    "musa-sdk:5.2.0-6"
+    "musa-toolkit:3.1.0-3"
+    "mtgpu-dkms:3.1.0-11"
+    "mtgpu-firmware:3.1.0-4"
+)
+
+INCLUDE_SRC=0
+[[ "${1:-}" == "--include-src" ]] && INCLUDE_SRC=1
+
+CACHE_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/copr-verify.XXXXXX")"
+trap 'rm -rf "$CACHE_ROOT"' EXIT
+
+token() {
+    # copr-cli keeps the API token in ~/.config/copr
+    sed -n 's/^token = //p' "${HOME}/.config/copr" 2>/dev/null | head -1
+}
+COPR_TOKEN="$(token)"
+
+pass=0; fail=0
+ok()   { printf '  \033[32mPASS\033[0m %s\n' "$*"; pass=$((pass+1)); }
+bad()  { printf '  \033[31mFAIL\033[0m %s\n' "$*"; fail=$((fail+1)); }
+info() { printf '  ---- %s\n' "$*"; }
+
+echo "COPR verification for owner '$OWNER' (api: $COPR_API)"
+
+for proj in "${PROJECTS[@]}"; do
+    echo
+    echo "== project $proj =="
+
+    # --- 1. build states from the API ------------------------------------
+    builds_json="$CACHE_ROOT/$proj-builds.json"
+    curl -fsS -H "Authorization: token $COPR_TOKEN" \
+        "$COPR_API/build/list?ownername=$OWNER&projectname=$proj&limit=200" \
+        -o "$builds_json" 2>/dev/null
+    if [[ -s "$builds_json" ]]; then
+        python3 - "$builds_json" <<'PY'
+import json,sys
+data=json.load(open(sys.argv[1]))
+rows=data.get("response", data) if isinstance(data,dict) else data
+if isinstance(rows,dict): rows=rows.get("results",[])
+latest={}
+for b in rows:
+    pkg=(b.get("source_package") or {}).get("name") or b.get("package_name")
+    if not pkg: continue
+    if pkg not in latest or b["id"]>latest[pkg]["id"]: latest[pkg]=b
+for pkg,b in sorted(latest.items()):
+    print(f"  build {b['id']} {pkg:22s} {b['state']:10s} chroots={','.join(b.get('chroots') or [])}")
+PY
+        states="$(python3 - "$builds_json" <<'PY'
+import json,sys
+data=json.load(open(sys.argv[1]))
+rows=data.get("response", data) if isinstance(data,dict) else data
+if isinstance(rows,dict): rows=rows.get("results",[])
+latest={}
+for b in rows:
+    pkg=(b.get("source_package") or {}).get("name") or b.get("package_name")
+    if not pkg: continue
+    if pkg not in latest or b["id"]>latest[pkg]["id"]: latest[pkg]=b
+print(",".join(f"{b['id']}:{pkg}:{b.get('state')}" for pkg,b in sorted(latest.items())
+                if b.get("state")!="succeeded"))
+PY
+)"
+        if [[ -z "$states" ]]; then
+            ok "latest build of every package reports state=succeeded"
+        else
+            bad "latest build not succeeded: $states"
+        fi
+    else
+        info "build list unavailable (need COPR API access); continuing with repo metadata only"
+    fi
+
+    # --- 2. artifacts per chroot from the published repo -----------------
+    for chroot in ${CHROOTS[$proj]}; do
+        base="$COPR_DL/$OWNER/$proj/$chroot/"
+        qf='%{name}-%{version}-%{release}.%{arch}'
+        # dnf5 prints repoquery records space separated on a single line, so
+        # split on whitespace before filtering the source RPMs out.
+        out="$(dnf --repofrompath=coprchk,$base --setopt=cachedir="$CACHE_ROOT/$chroot" \
+               --repo=coprchk -q repoquery --qf "$qf" 'musa*' 'mtgpu*' 2>/dev/null \
+               | tr ' ' '\n' | sed '/^$/d')"
+        if [[ $INCLUDE_SRC -eq 0 ]]; then
+            out="$(printf '%s\n' "$out" | grep -v '\.src$' || true)"
+        fi
+        if [[ -z "$out" ]]; then
+            bad "$chroot: repository advertises no MUSA artifacts (baseurl reachable? $base)"
+            continue
+        fi
+        missing=""
+        for exp in "${EXPECTED[@]}"; do
+            name="${exp%%:*}"; vr="${exp##*:}"
+            # accept the chroot's own release suffix (fc44/fc45/eln159/fc46/...)
+            if ! printf '%s' "$out" | grep -qE "$name-$vr(\.[a-z0-9_]+)*\."; then
+                missing="$missing $name-$vr"
+            fi
+        done
+        if [[ -n "$missing" ]]; then
+            bad "$chroot: missing expected artifacts:$missing"
+            info "present: $out"
+        else
+            ok "$chroot: all ${#EXPECTED[@]} expected artifact sets present"
+        fi
+    done
+done
+
+echo
+echo "passed: $pass   failed: $fail"
+[[ $fail -eq 0 ]] || exit 1

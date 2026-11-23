@@ -50,6 +50,22 @@ installed_version() {
     rpm -q --qf '%{VERSION}-%{RELEASE}' "$1" 2>/dev/null || true
 }
 
+# The vendor Mesa DRI drivers are shipped in musa-runtime-display. When they
+# are installed, Mesa loads them for the S30 DRM card and GNOME Shell /
+# mutter segfaults in its KMS thread, leaving no login screen. A compute-only
+# host must not have them.
+display_drivers_present() {
+    ls /usr/lib64/dri/ 2>/dev/null | grep -qiE 'musa|mtgpu'
+}
+
+check_display_stack() {
+    if [[ -n "$(installed_version musa-runtime-display)" ]] || display_drivers_present; then
+        echo "WARNING: vendor Mesa DRI drivers for Moore Threads are installed."
+        echo "         GNOME Shell crashes when mtgpu is loaded on such a host."
+        echo "         For a compute-only host: dnf remove musa-runtime-display"
+    fi
+}
+
 resolve_rpms() {
     local package rpm_file metadata name version matched expected
     [[ -d "$RPM_DIR" ]] || {
@@ -188,6 +204,7 @@ do_install() {
     done
     echo "RPM set and DKMS module are installed for $KVER; module was not loaded."
     echo "Boot arguments were not changed. Backup: $backup"
+    check_display_stack
     echo "INSTALL_STATUS: SUCCESS"
 }
 

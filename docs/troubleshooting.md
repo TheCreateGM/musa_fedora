@@ -53,6 +53,30 @@ was live; this is historical evidence only. Build logs are under
 `/home/axogm/Documents/project/musa-data/research/musa-fedora-live-validation-2026-11-12/`
 and `musa-data/research/builds/`.
 
+## Vendor event-report logging warning (cosmetic)
+
+At every `mtgpu` load the kernel log may show:
+
+```
+mtgpu 0000:01:00.0: Failed to create directory: /var/log/mtgpu, ret = -2
+mtgpu 0000:01:00.0: Failed to create directory: /var/log/mtgpu/event_report, ret = -2
+mtgpu 0000:01:00.0: Failed to create directory: /var/log/mtgpu/event_report/<uuid>, ret = -2
+mtgpu 0000:01:00.0: xid_record file create fd failed
+```
+
+Recorded 2026-11-23 with the directories already present (stale 2026-11-19
+state; the `event_report/<uuid>` subdirectory carries a non-searchable mode,
+`drw----r-x`). The directory and file creation logic lives in the opaque
+vendor core blob `objs/x86_64/mtgpu_core.o_binary` (confirmed by `strings`),
+so it cannot be patched from the source tree. `mtgpu-dkms` 3.1.0-12 ships a
+tmpfiles.d entry that guarantees `/var/log/mtgpu{,/event_report}` exist on
+fresh installs, which is necessary but not sufficient to silence the
+warning. It is cosmetic: the complete GPU workload (memcpy, runtime API,
+`mp_10` kernels, compute suite, FP64, Vulkan) passed with the warning
+present. Do not delete the stale `event_report` directory as an ad-hoc fix;
+its effect can only be verified across a controlled driver load in a
+reviewed boot.
+
 ## Archived experiments
 
 The CPU emulator and CPU-only experiments under

@@ -44,15 +44,15 @@ passed: 11   failed: 0
 
 | Project | Chroot | musa-runtime | musa-runtime-display | musa-sdk | musa-toolkit | mtgpu-dkms | mtgpu-firmware |
 |---|---|---|---|---|---|---|---|
-| `axogm/musa-fedora` | fedora-44-x86_64 | 1.5.4-4 | 1.5.4-4 | 5.2.0-6 | 3.1.0-3 | 3.1.0-11 | 3.1.0-4 |
-| `axogm/musa-fedora` | fedora-45-x86_64 | 1.5.4-4 | 1.5.4-4 | 5.2.0-6 | 3.1.0-3 | 3.1.0-11 | 3.1.0-4 |
-| `axogm/musa-fedora` | fedora-eln-x86_64 | 1.5.4-4 | 1.5.4-4 | 5.2.0-6 | 3.1.0-3 | 3.1.0-11 | 3.1.0-4 |
-| `axogm/musa-fedora` | fedora-rawhide-x86_64 | 1.5.4-4 | 1.5.4-4 | 5.2.0-6 | 3.1.0-3 | 3.1.0-11 | 3.1.0-4 |
-| `axogm/musa-mtt-s30` | fedora-43-x86_64 | 1.5.4-4 | 1.5.4-4 | 5.2.0-6 | 3.1.0-3 | 3.1.0-11 | 3.1.0-4 |
-| `axogm/musa-mtt-s30` | fedora-44-x86_64 | 1.5.4-4 | 1.5.4-4 | 5.2.0-6 | 3.1.0-3 | 3.1.0-11 | 3.1.0-4 |
-| `axogm/musa-mtt-s30` | fedora-45-x86_64 | 1.5.4-4 | 1.5.4-4 | 5.2.0-6 | 3.1.0-3 | 3.1.0-11 | 3.1.0-4 |
-| `axogm/musa-mtt-s30` | fedora-eln-x86_64 | 1.5.4-4 | 1.5.4-4 | 5.2.0-6 | 3.1.0-3 | 3.1.0-11 | 3.1.0-4 |
-| `axogm/musa-mtt-s30` | fedora-rawhide-x86_64 | 1.5.4-4 | 1.5.4-4 | 5.2.0-6 | 3.1.0-3 | 3.1.0-11 | 3.1.0-4 |
+| `axogm/musa-fedora` | fedora-44-x86_64 | 1.5.4-4 | 1.5.4-4 | 5.2.0-6 | 3.1.0-3 | 3.1.0-12 | 3.1.0-4 |
+| `axogm/musa-fedora` | fedora-45-x86_64 | 1.5.4-4 | 1.5.4-4 | 5.2.0-6 | 3.1.0-3 | 3.1.0-12 | 3.1.0-4 |
+| `axogm/musa-fedora` | fedora-eln-x86_64 | 1.5.4-4 | 1.5.4-4 | 5.2.0-6 | 3.1.0-3 | 3.1.0-12 | 3.1.0-4 |
+| `axogm/musa-fedora` | fedora-rawhide-x86_64 | 1.5.4-4 | 1.5.4-4 | 5.2.0-6 | 3.1.0-3 | 3.1.0-12 | 3.1.0-4 |
+| `axogm/musa-mtt-s30` | fedora-43-x86_64 | 1.5.4-4 | 1.5.4-4 | 5.2.0-6 | 3.1.0-3 | 3.1.0-12 | 3.1.0-4 |
+| `axogm/musa-mtt-s30` | fedora-44-x86_64 | 1.5.4-4 | 1.5.4-4 | 5.2.0-6 | 3.1.0-3 | 3.1.0-12 | 3.1.0-4 |
+| `axogm/musa-mtt-s30` | fedora-45-x86_64 | 1.5.4-4 | 1.5.4-4 | 5.2.0-6 | 3.1.0-3 | 3.1.0-12 | 3.1.0-4 |
+| `axogm/musa-mtt-s30` | fedora-eln-x86_64 | 1.5.4-4 | 1.5.4-4 | 5.2.0-6 | 3.1.0-3 | 3.1.0-12 | 3.1.0-4 |
+| `axogm/musa-mtt-s30` | fedora-rawhide-x86_64 | 1.5.4-4 | 1.5.4-4 | 5.2.0-6 | 3.1.0-3 | 3.1.0-12 | 3.1.0-4 |
 
 Latest build IDs (COPR package builds, identical content across the chroots
 of one project):
@@ -60,7 +60,7 @@ of one project):
 | Package | `axogm/musa-fedora` | `axogm/musa-mtt-s30` |
 |---|---|---|
 | musa-runtime (incl. `musa-runtime-display`) | 11377974 | 11377976 |
-| mtgpu-dkms | 11377872 | 11377878 |
+| mtgpu-dkms (3.1.0-12 rebuild) | 11378909 | 11378948 |
 | mtgpu-firmware | 11377871 | 11377877 |
 | musa-sdk | 11377875 | 11377881 |
 | musa-toolkit | 11377876 | 11377882 |
@@ -78,9 +78,38 @@ have aarch64 chroots enabled, and those correctly produce **no** artifacts
 repository directories stay empty, which is the expected result and not a
 build failure.
 
+The first pair of `mtgpu-dkms` 3.1.0-12 builds (11378875 / 11378876) was
+submitted before the changelog was scoped to match the observed vendor-core
+behaviour. Both projects were rebuilt at the same NVR so the published RPM
+changelog matches the tree: 11378909 / 11378948. The earlier pair is
+superseded and not used for the table above.
+
 Historical non-succeeded builds (`mtgpu-dkms` 11365559, `mtgpu-firmware`
 11366194) are superseded by the builds listed above and are irrelevant to the
 current package set.
+
+## Payload check of `mtgpu-dkms` 3.1.0-12
+
+Downloaded from the Fedora 45 repository of `axogm/musa-fedora`:
+
+```
+mtgpu-dkms-3.1.0-12.fc45.noarch.rpm
+rpm -K --nosignature → digests OK
+```
+
+The payload contains `/usr/lib/tmpfiles.d/mtgpu.conf` with
+`d /var/log/mtgpu 0755 root root -` and
+`d /var/log/mtgpu/event_report 0755 root root -`, plus the headless modprobe
+configuration and the udev rule. The vendor core object extracted from the
+published RPM still hashes to
+`d0fdaceab37bce7387d376f8a87a2e9dbf210eeccf4f4f7c67f8dee83f4e8200`, matching
+the project pin; the BRP strip workaround from 3.1.0-11 is intact.
+
+The changelog records the scope limit: the tmpfiles entry guarantees the
+directories on a fresh install, but the opaque vendor core can still log its
+`event_report` creation warning when a stale directory tree is present. The
+warning is cosmetic and did not affect the full GPU workload. See
+[the event-report root-cause note](root-cause-mtgpu-event-report-mkdir-2026-11-23.md).
 
 ## Payload check of the display split
 

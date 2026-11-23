@@ -28,7 +28,7 @@ EXPECTED=(
     "musa-runtime-display:1.5.4-4"
     "musa-sdk:5.2.0-6"
     "musa-toolkit:3.1.0-3"
-    "mtgpu-dkms:3.1.0-11"
+    "mtgpu-dkms:3.1.0-12"
     "mtgpu-firmware:3.1.0-4"
 )
 
@@ -61,37 +61,47 @@ for proj in "${PROJECTS[@]}"; do
         "$COPR_API/build/list?ownername=$OWNER&projectname=$proj&limit=200" \
         -o "$builds_json" 2>/dev/null
     if [[ -s "$builds_json" ]]; then
-        python3 - "$builds_json" <<'PY'
+        # The COPR build list has been served under different keys over time
+        # ("items", "response", "results"). Parse all of them and, crucially,
+        # fail loudly if no row could be extracted: an empty parse must not
+        # be reported as "every build succeeded".
+        builds_tsv="$CACHE_ROOT/$proj-builds.tsv"
+        python3 - "$builds_json" >"$builds_tsv" <<'PY'
 import json,sys
 data=json.load(open(sys.argv[1]))
-rows=data.get("response", data) if isinstance(data,dict) else data
-if isinstance(rows,dict): rows=rows.get("results",[])
+rows=[]
+if isinstance(data,list):
+    rows=data
+elif isinstance(data,dict):
+    for key in ("items","response","results","builds"):
+        v=data.get(key)
+        if isinstance(v,list):
+            rows=v; break
+        if isinstance(v,dict) and isinstance(v.get("results"),list):
+            rows=v["results"]; break
 latest={}
 for b in rows:
+    if not isinstance(b,dict): continue
     pkg=(b.get("source_package") or {}).get("name") or b.get("package_name")
     if not pkg: continue
-    if pkg not in latest or b["id"]>latest[pkg]["id"]: latest[pkg]=b
+    if pkg not in latest or b.get("id",0)>latest[pkg].get("id",0): latest[pkg]=b
 for pkg,b in sorted(latest.items()):
-    print(f"  build {b['id']} {pkg:22s} {b['state']:10s} chroots={','.join(b.get('chroots') or [])}")
+    ver=(b.get("source_package") or {}).get("version","?")
+    state=b.get("state","?")
+    chroots=",".join(b.get("chroots") or [])
+    print("\t".join([str(b.get("id","?")),pkg,ver,state,chroots]))
 PY
-        states="$(python3 - "$builds_json" <<'PY'
-import json,sys
-data=json.load(open(sys.argv[1]))
-rows=data.get("response", data) if isinstance(data,dict) else data
-if isinstance(rows,dict): rows=rows.get("results",[])
-latest={}
-for b in rows:
-    pkg=(b.get("source_package") or {}).get("name") or b.get("package_name")
-    if not pkg: continue
-    if pkg not in latest or b["id"]>latest[pkg]["id"]: latest[pkg]=b
-print(",".join(f"{b['id']}:{pkg}:{b.get('state')}" for pkg,b in sorted(latest.items())
-                if b.get("state")!="succeeded"))
-PY
-)"
-        if [[ -z "$states" ]]; then
-            ok "latest build of every package reports state=succeeded"
+        sed 's/\t/ /g; s/^/  build /' "$builds_tsv" | sed 's/ *$//'
+        n_builds="$(wc -l <"$builds_tsv")"
+        if [[ "$n_builds" -eq 0 ]]; then
+            bad "the build list could not be parsed: no build state was verified"
         else
-            bad "latest build not succeeded: $states"
+            states="$(awk -F'\t' '$4 != "succeeded" {printf "%s:%s:%s ", $1,$2,$4}' "$builds_tsv")"
+            if [[ -z "$states" ]]; then
+                ok "latest build of every package reports state=succeeded"
+            else
+                bad "latest build not succeeded: $states"
+            fi
         fi
     else
         info "build list unavailable (need COPR API access); continuing with repo metadata only"

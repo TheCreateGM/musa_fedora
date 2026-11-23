@@ -1,11 +1,25 @@
 # Installation
 
 The MTT S30 is present on this host, and the vendor **driver 3.1.0** plus
-matching **MUSA runtime 1.5.4** are installed. The driver is currently
-blacklisted and the card is unbound to protect the Intel-driven desktop after
-prior DRM/KMS crashes; MUSA GPU workloads are not currently available. See the
-[current live status](docs/current-state-2026-11-20.md). This guide describes
-package workflows and IOMMU setup; it does not authorize loading the driver.
+matching **MUSA runtime 1.5.4** are installed. The full stack has been verified
+end-to-end on this physical card on 2026-11-23 — see the
+[suite verification](docs/hardware-validation-2026-11-23-suite-verify.md) and the
+[container verification of the shipped packages](docs/container-verification-2026-11-23.md)
+(13 passed, 0 failed each).
+
+On a **normal boot** the card is still unbound, because
+`/etc/modprobe.d/blacklist-mtgpu.conf` blocks `mtgpu` to protect the
+Intel-driven GNOME desktop. That block is a deliberate, reversible safety
+setting, so a fresh install is compute-capable but not yet compute-active. Two
+supported ways to get a working compute node:
+
+* one-shot, no boot change: [`scripts/hardware/load-and-test.sh`](scripts/hardware/load-and-test.sh)
+  under the [controlled-load runbook](docs/runbook-controlled-load-2026-11-23.md);
+* permanently, boot-config change: [`scripts/compute-mode.sh enable`](docs/compute-mode.md)
+  (preflight guards, backups, and `disable` to restore).
+
+This guide covers package workflows, IOMMU setup and driver activation; §6 lists
+the recovery paths.
 
 ## Supported Fedora releases and architectures
 
@@ -30,9 +44,15 @@ pkexec dnf install musa-toolkit
 
 `musa-toolkit` is a metapackage that pulls in `mtgpu-dkms`, `mtgpu-firmware`,
 `musa-runtime` and `musa-sdk`. Installing these packages does **not** load
-`mtgpu`, rebind the GPU, or change boot arguments. The driver remains
-blacklisted until a separately approved maintenance window; see
-[the host status](docs/current-state-2026-11-20.md) before attempting a load.
+`mtgpu`, rebind the GPU, or change boot arguments. For a compute-only node keep
+`musa-runtime-display` out: it ships the vendor Mesa DRI/GBM/Xorg drivers, which
+Mesa picks up and which crashed GNOME Shell in its KMS thread. Install it only
+if `mtgpu` is meant to drive the S30's own DP/HDMI outputs.
+
+After installing, activate compute through §1 (IOMMU, if not already enabled)
+and then the one-shot load or `compute-mode.sh enable` described at the top.
+Verify with `scripts/verify-musa.sh`; it refuses to report a pass on a stack
+that is not actually bound to `mtgpu`.
 
 ## Build dependencies
 
@@ -90,10 +110,10 @@ uses DNF with --no-autoremove, and refuses while mtgpu is loaded. It leaves
 IOMMU boot arguments, user data, and unrelated packages unchanged. Do not use
 manual rm, modprobe -r, or file-copy commands to replace/remove the live module.
 
-The five RPMs are installed on this host. The module is currently not loaded,
-and the `mtgpu` blacklist remains in place; the install helper does not load or
-replace a driver. Do not remove the blacklist or load/unbind/rebind the driver
-without a reviewed display rollback and vendor-core recovery plan.
+The install helper does not load or replace a driver. Do not unbind/rebind the
+device or replace a live module: prior unbind/rebind triggered a NULL
+dereference in the vendor core. Activation is always a fresh module load, either
+for one boot (`load-and-test.sh`) or persistently (`compute-mode.sh enable`).
 
 
 ## 1. Enable the IOMMU (required for any MUSA runtime call)
@@ -160,11 +180,52 @@ headers from `/usr/local/musa/include`; the SDK's 5.2.0
 ## 5. Verify
 
 ```sh
-scripts/verify-musa.sh
+scripts/verify-musa.sh                  # full suite; needs a bound driver
+MUSA_S30_TEST_APPROVED=1 scripts/test-gpu.sh   # single gated smoke test
 ```
 
-## Recovery
+## 6. Recovery
 
-* Boot entry backups: `musa-data/research/system-backups/*/bls-entries/`
-* Previous module: `musa-data/research/system-backups/*/mtgpu.ko.in-use`
-* To restore a boot entry: `pkexec /usr/bin/cp -a <backup>/. /boot/loader/entries/`
+Everything below is reversible and was exercised on this host.
+
+**GUI does not come up after a boot with `mtgpu` active** (the historical
+Mesa/GNOME crash). The desktop does not need the card, so switch the driver off
+again from a TTY (`Ctrl+Alt+F3`):
+
+```sh
+pkexec /home/axogm/Documents/project/musa-fedora/scripts/compute-mode.sh disable
+pkexec /usr/bin/systemctl reboot
+```
+
+That restores the exact previous `/etc/modprobe.d` state from
+`/var/backups/musa-fedora-compute-mode/` (or writes a fresh blacklist if there
+is no backup) and regenerates the initramfs with `dracut`, so the next boot is
+the safe unbound one. Full background: [boot fix](docs/boot-fix-2026-11-23.md).
+
+**Kernel fault / Oops logged by `mtgpu`.** Do not reuse the boot; the driver logs
+are not trustworthy after a fault. Reboot, and keep the card off until the next
+reviewed load. See [clean-boot resume plan](docs/clean-boot-resume-plan-2026-11-17.md).
+
+**If IBT/`CONFIG_X86_KERNEL_IBT` blocks the module** ("missing ENDBR"): follow
+[IBT-off recovery](docs/ibt-off-recovery.md); it is a temporary boot-argument
+change with its own rollback.
+
+**A kernel update replaced the running kernel** and the module no longer
+builds: [kernel update recovery](docs/kernel-update-recovery.md) and
+`scripts/dkms-kernel-update.sh`.
+
+**Kernel update left no working module at all** (`vermagic` mismatch, DKMS
+failed): rebuild from source with `scripts/build-kernel-driver.sh` instead of
+hand-copying an artifact, then reload on a later boot. Never copy a `.ko` over a
+loaded module.
+
+**Boot-argument and bootloader rollback.** `scripts/enable-iommu.sh` and
+`scripts/disable-iommu.sh` back up the BLS entries they rewrite; the
+`setup`-stage backups live in `musa-data/research/system-backups/*/bls-entries/`
+and restore with `pkexec /usr/bin/cp -a <backup>/. /boot/loader/entries/`. The
+previous in-use module is preserved as
+`musa-data/research/system-backups/*/mtgpu.ko.in-use`.
+
+**Last-resort console recovery.** If GNOME and GDM both fail, boot the previous
+kernel from the GRUB menu, or append `3` to the kernel command line for a
+multi-user target; the S30 is not needed to boot or to log in.

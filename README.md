@@ -9,6 +9,12 @@ the [full host status](docs/current-state-2026-11-20.md), and the
 For the repair of the installed system's disk boot (GDM crash caused by an
 auto-loaded `mtgpu`), see [the 2026-11-23 boot fix](docs/boot-fix-2026-11-23.md).
 
+A controlled load test on the installed system on 2026-11-23 ran the full MUSA
+workload successfully on the S30; see the
+[2026-11-23 load-test evidence](docs/hardware-validation-2026-11-23-load-test.md).
+That test did not change the boot-time blacklist and does not enable compute on
+a normal boot.
+
 The project targets the vendor's own S30 stack — **mtgpu driver 3.1.0** plus
 **MUSA runtime 1.5.4** from `musa_3.1.0-pc_x86.deb` — and codes kernels with the
 **MUSA 5.2.0 `mcc`** compiler for the `mp_10` (SuDi) architecture.
@@ -24,8 +30,14 @@ crashes; prior vendor-core faults also make ad-hoc load/rebind unsafe. The
 read-only hardware check and gated GPU test both report NOT RUN/BLOCKED. In the
 2026-11-20 recheck, the isolated 7.3.4 driver build and MUSA 5.2.0 `mp_10`
 compile/header checks passed, but no driver was installed or loaded and no GPU
-workload ran. The following hardware rows describe only recorded, historical
-2026-11-17 results, not the current boot state.
+workload ran. In a separate controlled load on 2026-11-23, the driver was
+loaded once with headless parameters on the installed kernel and all functional
+GPU steps passed (memcpy, runtime API, `mp_10` kernels, compute, fp64, Vulkan);
+two informational tools failed and GNOME Shell crashed. That result is
+documented in the
+[2026-11-23 load-test evidence](docs/hardware-validation-2026-11-23-load-test.md).
+It is not the state of a normal boot, where the S30 stays unbound. The table
+below records both the 2026-11-17 and 2026-11-23 hardware runs.
 
 | Layer | State | Evidence |
 |---|---|---|

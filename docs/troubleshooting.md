@@ -77,6 +77,14 @@ present. Do not delete the stale `event_report` directory as an ad-hoc fix;
 its effect can only be verified across a controlled driver load in a
 reviewed boot.
 
+The code path is identified at function level in
+[`root-cause-mtgpu-event-report-mkdir-2026-11-23.md`](root-cause-mtgpu-event-report-mkdir-2026-11-23.md):
+the message comes from `mtgpu_event_report_persist_init`, the driver logs
+the error and continues, and only the vendor XID log file is lost. That
+document also shows why `-2` cannot mean "the directory is missing": the
+kernel returns `-EEXIST` for an existing name, so the driver's lookup did
+not observe the host's existing tree.
+
 ## Archived experiments
 
 The CPU emulator and CPU-only experiments under

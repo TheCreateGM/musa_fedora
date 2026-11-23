@@ -49,6 +49,39 @@ if [[ -z "$MODULE" ]]; then
     log "REFUSE: no mtgpu module for kernel $(uname -r)"
     exit 2
 fi
+
+# Stage the GPU test binaries into the log directory. Without this the
+# binary-driven steps below fail with rc=127 after the driver is already
+# loaded — a load wasted on a missing binary. Prefer a staged set in
+# ~/.musa-work/test-bin (built reproducibly by
+# scripts/hardware/build-test-binaries.sh); build it there if absent.
+stage_test_binaries() {
+    local src="$HOME/.musa-work/test-bin"
+    local needed=(musart-smoke musa-vector-add musa-compute musa-fp64 vk-enum)
+    local missing=0 b
+    for b in "${needed[@]}"; do
+        [[ -x "$LOG_DIR/$b" ]] || missing=1
+    done
+    if ((missing == 0)); then return 0; fi
+    for b in "${needed[@]}"; do
+        if [[ -x "$src/$b" ]]; then
+            cp -a "$src/$b" "$LOG_DIR/$b"
+        fi
+    done
+    for b in "${needed[@]}"; do
+        if [[ ! -x "$LOG_DIR/$b" ]]; then
+            log "building missing test binary: $b"
+            if [[ ! -x "$src/" ]]; then mkdir -p "$src"; fi
+            if ! TARGET_DIR="$src" "$ROOT/scripts/hardware/build-test-binaries.sh" "$src" \
+                    >>"$LOG_DIR/build-test-binaries.log" 2>&1; then
+                log "REFUSE: cannot build $b (see build-test-binaries.log)"
+                exit 2
+            fi
+            cp -a "$src/$b" "$LOG_DIR/$b"
+        fi
+    done
+    log "test binaries staged: $(ls "${needed[@]}" 2>/dev/null | wc -l)/${#needed[@]}"
+}
 log "module: $MODULE"
 log "sha256: $(sha256sum "$MODULE")"
 log "core:   $(sha256sum /usr/src/mtgpu-3.1.0/objs/x86_64/mtgpu_core.o_binary 2>/dev/null || echo n/a)"
@@ -57,6 +90,8 @@ log "blacklist: $(tr '\n' ' ' < /etc/modprobe.d/blacklist-mtgpu.conf)"
 log "display options: $(grep -v '^#' /etc/modprobe.d/90-mtgpu-headless.conf | tr '\n' ' ')"
 log "GNOME before load: $(pgrep -c gnome-shell || echo 0) gnome-shell process(es)"
 log "sessions before load: $(loginctl list-sessions --no-legend | wc -l)"
+
+stage_test_binaries
 
 hdr "load (headless args, single attempt)"
 timeout 180 pkexec /usr/sbin/insmod "$MODULE" \

@@ -33,11 +33,14 @@ stayed in place; the result below is the evidence behind
 blacklist untouched). Log:
 `~/.musa-work/load-test-20261123T073849Z/load-and-test.log`.
 
-The run began with the script's own insmod and the first four steps. The five
-remaining steps were interrupted by the previous session; they were built
-with the reproducible builder `scripts/hardware/build-test-binaries.sh`
-(commit `436e6bc`) into the same log directory and executed with exactly the
-environment `load-and-test.sh` uses, appending to the same log file:
+The run was the script's own insmod and the first four steps; the remaining
+five steps exited `rc=127` because the script did not stage the test binaries
+into its log directory, so `load-and-test.sh` ended with `overall rc=1` — a
+staging gap, not a functional failure. The five steps were then executed
+manually: the binaries were built with the reproducible builder
+`scripts/hardware/build-test-binaries.sh` (commit `436e6bc`) into the same
+log directory and each step ran with exactly the environment
+`load-and-test.sh` uses, appending to the same log file:
 
 ```
 env LD_LIBRARY_PATH=/usr/local/musa/lib timeout 120 ./musart-smoke
@@ -79,10 +82,15 @@ MTT S30, `multiProcessorCount=8`, `maxThreadsPerMultiProcessor=6144`,
 
 ## Interpretation
 
-* The **driver** (mtgpu 3.1.0), the **1.5.4 runtime**, the 5.2.0 `mcc`-built
-  `mp_10` kernels and the Vulkan ICD all work on the installed kernel, and
-  they work **while the desktop runs on i915** — the two devices coexist when
-  the vendor Mesa display drivers are absent.
+* `load-and-test.sh` itself returned `rc=1`: its five binary-driven steps got
+  `rc=127` because the binaries were missing from the log directory. This is
+  a script staging bug (fixed by staging from `~/.musa-work/test-bin`), not a
+  GPU or driver failure; the loaded-module steps it did run (`insmod`,
+  telemetry, `musaInfo`, `muMemcpyTest`) all passed.
+* The manual post-load runs — and an independent re-run of the same binaries
+  against the live device by a second observer — all passed, so the functional
+  result stands: the driver, the 1.5.4 runtime, the `mp_10` kernels and the
+  Vulkan ICD work on the installed kernel while the desktop runs on i915.
 * The mutter crash is confirmed as a packaging problem (vendor DRI drivers in
   the base runtime), not a driver bug. `musa-runtime` 1.5.4-4 + no
   `musa-runtime-display` is a stable compute-only configuration.

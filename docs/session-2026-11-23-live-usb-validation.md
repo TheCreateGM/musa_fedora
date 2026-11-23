@@ -67,10 +67,13 @@ and `axogm/musa-mtt-s30` (Fedora 43/44/45/ELN/Rawhide).
 | `musa-sdk` 5.2.0-6 | 11377875 | 11377881 |
 | `musa-toolkit` 3.1.0-3 | 11377876 | 11377882 |
 
-**Final result: all ten builds `succeeded`** (per-build `copr-cli status`), and
-the monitor downloaded the build logs for inspection. Per-chroot success
-markers were collected in `/home/axogm/.musa-work/copr-logs/`. This is a
-**build** result only; it does not qualify driver loading or GPU execution.
+**Final result: all ten builds `succeeded`** (confirmed one-by-one with
+`copr-cli status`). The follow-up `download-build` calls for full log/RPM
+retrieval stalled on the COPR backend; partial artifacts were written under
+`/home/axogm/.musa-work/copr-logs/` and `/home/axogm/.musa-work/copr-rpms/`,
+and those hung jobs were terminated rather than left running. No container
+install test was performed from those partial downloads. This is a **build**
+result only; it does not qualify driver loading or GPU execution.
 
 ## Installed-system disk boot repair
 

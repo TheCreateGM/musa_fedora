@@ -26,6 +26,19 @@ for the locally built artifacts.
 Requirements: `gpg`, `rpmsign`, `rpmkeys` (all in `rpm`/`gnupg2` packages),
 and `rpmbuild` for producing the packages.
 
+## Verification record — 2026-11-23
+
+The complete local 5-RPM set (`mtgpu-dkms` 3.1.0-11, `mtgpu-firmware` 3.1.0-4,
+`musa-runtime` 1.5.4-3, `musa-sdk` 5.2.0-6, `musa-toolkit` 3.1.0-3) was signed
+with the local build-signing key `763A7D1470E1672E236F290EFBA85A80C8D8BC89`
+via `scripts/rpm-signing.sh sign` (unsigned originals preserved as
+`*.rpm.unsigned`) and verified with `scripts/rpm-signing.sh verify`:
+`VERIFIED_PACKAGES: 5`, every package `OK` against the armored public key in
+`packaging/rpm/keys/musa-fedora-signing-key.asc`. The key is tracked in the
+repository; the revocation certificate (`*.rev`) is not. This closes the
+"local packages are unsigned by default" gap for the current local-build
+tree; packages published by Copr remain signed by the Copr build service.
+
 ## Creating the key
 
 ```sh

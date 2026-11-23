@@ -17,6 +17,34 @@ a normal boot. To avoid the Mesa/GNOME crash seen there, the vendor display
 drivers now live in an opt-in `musa-runtime-display` subpackage; see the
 [display-driver split](docs/display-driver-subpackage-2026-11-23.md).
 
+### Updates — 2026-11-23 (session)
+
+- **The installed system boots from disk again.** The GDM crash fix
+  ([boot fix](docs/boot-fix-2026-11-23.md)) took effect: the host now boots
+  `/dev/nvme0n1p7` on kernel `7.3.4-300.fc45.x86_64`, GNOME runs on Intel
+  `i915`, and `mtgpu` stays unloaded with the boot-time block in place.
+- **All 9 configured COPR chroots verified**, for both `axogm/musa-fedora` and
+  `axogm/musa-mtt-s30`: every package build reports `succeeded` and every
+  chroot's published repository advertises `musa-runtime 1.5.4-4`,
+  `musa-runtime-display 1.5.4-4`, `musa-sdk 5.2.0-6`, `musa-toolkit 3.1.0-3`,
+  `mtgpu-dkms 3.1.0-11` and `mtgpu-firmware 3.1.0-4`. Re-run it with
+  [`scripts/verify-copr-chroots.sh`](scripts/verify-copr-chroots.sh); see
+  [the verification record](docs/copr-verification-2026-11-23.md).
+- **The driver still builds from the repository source** for the running
+  kernel (`7.3.4-300.fc45.x86_64`, vermagic verified, S30 PCI alias
+  `pci:v00001ED5d00000102` present) and its module aliases are identical to
+  the installed module — reproducible, not a one-off binary.
+- **New:** [`scripts/compute-mode.sh`](scripts/compute-mode.sh) enables the
+  S30 for compute on a normal boot (removing the boot-time block) with
+  preflight guards, backups and a restore path, and
+  [`docs/compute-mode.md`](docs/compute-mode.md) explains the workflow, the
+  evidence behind it and the limits.
+- **Open:** the controlled load test has not yet been repeated with
+  `musa-runtime 1.5.4-4` installed (the version without the Mesa DRI
+  drivers). That repetition needs root privileges on this host, which require
+  interactive polkit approval, and it is what turns the crash fix into a
+  verified claim. Until it is done, the boot-time block stays in place.
+
 The project targets the vendor's own S30 stack — **mtgpu driver 3.1.0** plus
 **MUSA runtime 1.5.4** from `musa_3.1.0-pc_x86.deb` — and codes kernels with the
 **MUSA 5.2.0 `mcc`** compiler for the `mp_10` (SuDi) architecture.
@@ -55,7 +83,8 @@ below records both the 2026-11-17 and 2026-11-23 hardware runs.
 | MUSA compute operations | **verified** | SAXPY, shared reduction, atomics, constant memory, device math, 2D launch, D2D copy, and FP64 passed |
 | Headless Vulkan | **verified, limited** | S30 device/queue, buffer allocation, and host-visible memory map passed; no rendering test |
 | Moore Threads OpenCL | **unavailable** | No MT ICD in the default loader; archived 2.1.1 ICD compute probe caused a kernel Oops (do not use) |
-| Copr package builds | **see live status** | configured targets are Fedora 44/45, ELN, and Rawhide x86_64; the second project adds Fedora 43; build success does not qualify driver loading — see [build status](docs/current-state-2026-11-20.md) |
+| Copr package builds | **verified 2026-11-23** | 9/9 chroots across both projects carry the current package set and every build reports `succeeded` — see [COPR verification](docs/copr-verification-2026-11-23.md) and `scripts/verify-copr-chroots.sh`; build success does not qualify driver loading |
+| Driver rebuild from source | **verified 2026-11-23** | `scripts/build-kernel-driver.sh` rebuilds `mtgpu` for `7.3.4-300.fc45.x86_64`; vermagic matches and the module aliases equal the installed module's |
 | Historical Fedora container + GPU test | **verified** | the 2026-11-17 five-RPM set installed in a throwaway Fedora 45 container and its packaged runtime and `mcc` ran on the S30: `13 passed, 0 failed` |
 | Current Fedora 45 package install + compiler | **compile-only passed** | current Copr RPMs installed in a disposable container with scriptlets disabled; `rpm -V`, `dnf check`, and the packaged compiler/header smoke check passed; no GPU runtime query was made |
 

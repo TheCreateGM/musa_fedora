@@ -38,12 +38,15 @@ if [[ -f "$MUSA_RT_LIB/libmusart.so" ]]; then
         | awk '/SONAME/ {print $2; exit}')"
 fi
 
+if [[ -z "$EXPECTED_MUSART_SONAME" ]]; then
+    echo "FATAL: cannot read the SONAME of the installed MUSA runtime ($MUSA_RT_LIB/libmusart.so)"
+    echo "       the runtime library is missing or unreadable, so the link target cannot be verified."
+    echo "       Refusing to build test binaries whose runtime linkage cannot be checked."
+    exit 1
+fi
+
 check_runtime_link() {
     local name="$1" bin="$TARGET/$1" needed
-    [[ -n "$EXPECTED_MUSART_SONAME" ]] || {
-        echo "  SKIP runtime check: cannot read the SONAME of $MUSA_RT_LIB/libmusart.so"
-        return 0
-    }
     if ! needed="$(readelf -d "$bin" 2>/dev/null | awk '/NEEDED/ {print $NF}' | tr -d '[]')"; then
         echo "  FAILED: cannot read the dynamic section of $name"; rc=1; return 0
     fi

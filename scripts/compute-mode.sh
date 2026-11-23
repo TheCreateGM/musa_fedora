@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # compute-mode.sh — control the MTT S30 compute mode on Fedora.
 #
-#   compute-mode.sh status     report the current state (read-only)
-#   compute-mode.sh enable     enable MUSA compute on the S30 at boot
-#   compute-mode.sh disable    return to the blacklisted (display-only) state
+#   compute-mode.sh status             report the current state (read-only)
+#   compute-mode.sh enable [--dry-run] enable MUSA compute on the S30 at boot
+#   compute-mode.sh disable [--dry-run] return to the blacklisted state
+#
+# --dry-run performs the preflight and prints the exact plan without requiring
+# root and without changing any file, module, or initramfs.
 #
 # Why the blacklist exists and why it is not a driver workaround
 # -------------------------------------------------------------
@@ -36,6 +39,7 @@ KVER="$(uname -r)"
 REPO_ROOT="$(cd -- "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 RC=0
+DRY_RUN=0
 say()  { printf '%s\n' "$*"; }
 ok()   { printf '  [ OK ] %s\n' "$*"; }
 warn() { printf '  [WARN] %s\n' "$*"; }
@@ -76,7 +80,64 @@ blacklisted() {
 }
 
 dri_drivers_present() {
-    ls /usr/lib64/dri/ 2>/dev/null | grep -iE 'musa|mtgpu'
+    local d found=""
+    for d in /usr/lib64/dri /usr/lib64/gbm /usr/lib64/xorg/modules/drivers; do
+        [[ -d "$d" ]] || continue
+        found+="$(find "$d" -maxdepth 1 \( -type f -o -type l \) 2>/dev/null \
+            | grep -iE '/(musa|mtgpu)' || true)"
+        found+=$'\n'
+    done
+    found="$(printf '%s\n' "$found" | sed '/^$/d')"
+    [[ -z "$found" ]] && return 1
+    printf '%s\n' "$found"
+}
+
+initramfs_tool() {
+    if command -v dracut >/dev/null 2>&1; then
+        echo dracut; return 0
+    elif command -v update-initramfs >/dev/null 2>&1; then
+        echo update-initramfs; return 0
+    fi
+    return 1
+}
+
+# Regenerate the initramfs after the modprobe configuration changed. A stale
+# initramfs can still carry the old /etc/modprobe.d state, so skipping this is
+# unsafe. Returns non-zero and prints the tool log on failure.
+regenerate_initramfs() {
+    local backup_dir="$1" tool img="/boot/initramfs-$KVER.img"
+    local log="/tmp/compute-mode-initramfs.log"
+
+    if ! tool="$(initramfs_tool)"; then
+        err "neither dracut nor update-initramfs is available"
+        err "refusing to continue: the initramfs would keep the old modprobe state"
+        return 2
+    fi
+
+    if [[ -f "$img" ]]; then
+        cp -a "$img" "$backup_dir/" 2>/dev/null \
+            && ok "backed up $img" \
+            || { err "cannot back up $img"; return 1; }
+    fi
+
+    if [[ "$tool" == dracut ]]; then
+        if dracut --force --kver "$KVER" >"$log" 2>&1; then
+            ok "initramfs for $KVER regenerated with dracut"
+        else
+            err "dracut failed (log: $log)"
+            tail -10 "$log" 2>/dev/null | sed 's/^/    /'
+            return 1
+        fi
+    else
+        if update-initramfs -u -k "$KVER" >"$log" 2>&1; then
+            ok "initramfs for $KVER regenerated with update-initramfs"
+        else
+            err "update-initramfs failed (log: $log)"
+            tail -10 "$log" 2>/dev/null | sed 's/^/    /'
+            return 1
+        fi
+    fi
+    return 0
 }
 
 s30_present() {
@@ -125,6 +186,11 @@ cmd_status() {
         ok "no modprobe blacklist for mtgpu"
     fi
     [[ -f "$HEADLESS_CONF" ]] && ok "$HEADLESS_CONF present" || warn "$HEADLESS_CONF missing"
+    if tool="$(initramfs_tool)"; then
+        ok "initramfs tool: $tool"
+    else
+        err "neither dracut nor update-initramfs is available"
+    fi
     say ""
 
     say "Hardware"
@@ -145,7 +211,7 @@ cmd_status() {
 
 # ----------------------------------------------------------------- enable ---
 cmd_enable() {
-    need_root enable
+    (( DRY_RUN )) || need_root enable
 
     say "Enabling MUSA compute mode for the MTT S30"
     say ""
@@ -177,10 +243,27 @@ cmd_enable() {
         err "S30 ($S30_PCI_ID) not found on the PCI bus"; RC=1
     fi
 
+    local tool
+    if ! tool="$(initramfs_tool)"; then
+        err "neither dracut nor update-initramfs is available"; RC=1
+    else
+        ok "initramfs tool: $tool"
+    fi
+
     if [[ $RC -ne 0 ]]; then
         say ""
         err "preflight failed — nothing was changed"
         return 1
+    fi
+
+    if (( DRY_RUN )); then
+        say "DRY-RUN: the preflight passed; no file, module, or initramfs was changed."
+        say "  would back up $BLACKLIST_CONF and /etc/modprobe.d/*.conf"
+        say "  would ensure $HEADLESS_CONF sets display=none"
+        say "  would move any file that blacklists mtgpu out of /etc/modprobe.d"
+        say "  would run: $tool (regenerate /boot/initramfs-$KVER.img)"
+        say "  would run: modprobe mtgpu"
+        return 0
     fi
 
     # --- backup ---------------------------------------------------------
@@ -208,8 +291,11 @@ cmd_enable() {
     fi
 
     # --- remove the boot-time block ------------------------------------
+    local -a moved_backup=() moved_original=()
     if [[ -f "$BLACKLIST_CONF" ]]; then
         mv "$BLACKLIST_CONF" "$BACKUP_ROOT/$ts/blacklist-mtgpu.conf.moved"
+        moved_backup+=("$BACKUP_ROOT/$ts/blacklist-mtgpu.conf.moved")
+        moved_original+=("$BLACKLIST_CONF")
         ok "removed $BLACKLIST_CONF (copy kept in the backup dir)"
     fi
     # Any other *.conf that blacklists mtgpu would still block the module.
@@ -217,17 +303,22 @@ cmd_enable() {
     for other in $(blacklisted); do
         [[ -f "$other" ]] || continue
         mv "$other" "$BACKUP_ROOT/$ts/$(basename "$other").moved"
+        moved_backup+=("$BACKUP_ROOT/$ts/$(basename "$other").moved")
+        moved_original+=("$other")
         ok "removed additional blacklist $other"
     done
 
     # --- initramfs -----------------------------------------------------
-    if command -v update-initramfs >/dev/null 2>&1; then
-        if update-initramfs -u -k "$KVER" >/tmp/compute-mode-initramfs.log 2>&1; then
-            ok "initramfs for $KVER regenerated (stale blacklist removed)"
-        else
-            warn "update-initramfs failed; see /tmp/compute-mode-initramfs.log"
-            cat /tmp/compute-mode-initramfs.log | tail -5 | sed 's/^/    /'
-        fi
+    if ! regenerate_initramfs "$BACKUP_ROOT/$ts"; then
+        local i
+        for ((i=0; i<${#moved_backup[@]}; i++)); do
+            mv "${moved_backup[$i]}" "${moved_original[$i]}" 2>/dev/null \
+                && ok "restored ${moved_original[$i]}" \
+                || err "could not restore ${moved_original[$i]}"
+        done
+        say ""
+        err "initramfs regeneration failed — boot-time block restored, nothing loaded"
+        return 1
     fi
 
     # --- load now ------------------------------------------------------
@@ -255,10 +346,30 @@ cmd_enable() {
 
 # ---------------------------------------------------------------- disable ---
 cmd_disable() {
-    need_root disable
+    (( DRY_RUN )) || need_root disable
 
     say "Disabling MUSA compute mode (restoring the boot-time block)"
     say ""
+
+    local tool
+    if ! tool="$(initramfs_tool)"; then
+        err "neither dracut nor update-initramfs is available"
+        err "refusing to change the blacklist without being able to regenerate the initramfs"
+        return 1
+    fi
+
+    if (( DRY_RUN )); then
+        say "DRY-RUN: the preflight passed; no file or initramfs was changed."
+        say "  would restore $BLACKLIST_CONF from the newest backup (or write a fresh one)"
+        say "  would run: $tool (regenerate /boot/initramfs-$KVER.img)"
+        say "  would NOT unload mtgpu; a reboot is required"
+        return 0
+    fi
+
+    local ts; ts="$(date -u +%Y%m%dT%H%M%SZ)"
+    mkdir -p "$BACKUP_ROOT/$ts"
+    [[ -f "$BLACKLIST_CONF" ]] && cp -a "$BLACKLIST_CONF" "$BACKUP_ROOT/$ts/blacklist-mtgpu.conf.pre-disable"
+    say "  backup dir: $BACKUP_ROOT/$ts"
 
     local src
     src="$(find "$BACKUP_ROOT" -name 'blacklist-mtgpu.conf' -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -1 | cut -d' ' -f2-)"
@@ -273,10 +384,11 @@ EOF
         ok "wrote a fresh $BLACKLIST_CONF"
     fi
 
-    if command -v update-initramfs >/dev/null 2>&1; then
-        update-initramfs -u -k "$KVER" >/tmp/compute-mode-initramfs.log 2>&1 \
-            && ok "initramfs regenerated" \
-            || warn "update-initramfs failed (see /tmp/compute-mode-initramfs.log)"
+    if ! regenerate_initramfs "$BACKUP_ROOT/$ts"; then
+        say ""
+        err "the blacklist file was restored, but initramfs regeneration failed"
+        err "do not reboot until it is fixed: run '$tool' manually and check the log"
+        return 1
     fi
 
     say ""
@@ -286,9 +398,18 @@ EOF
 }
 
 # ------------------------------------------------------------------- main ---
-case "${1:-status}" in
+ACTION="${1:-status}"
+shift || true
+while (($#)); do
+    case "$1" in
+        --dry-run) DRY_RUN=1; shift ;;
+        *) echo "usage: $0 {status|enable|disable} [--dry-run]" >&2; exit 2 ;;
+    esac
+done
+
+case "$ACTION" in
     status)  cmd_status ;;
     enable)  cmd_enable ;;
     disable) cmd_disable ;;
-    *) echo "usage: $0 {status|enable|disable}" >&2; exit 2 ;;
+    *) echo "usage: $0 {status|enable|disable} [--dry-run]" >&2; exit 2 ;;
 esac

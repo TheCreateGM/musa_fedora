@@ -12,7 +12,7 @@
 
 Name:           mtgpu-dkms
 Version:        3.1.0
-Release:        11%{?dist}
+Release:        12%{?dist}
 Summary:        DKMS kernel driver source for Moore Threads GPUs (mtgpu)
 
 License:        GPL-2.0-only
@@ -130,12 +130,24 @@ install -D -m 0644 90-mtgpu-headless.conf \
     %{buildroot}%{_sysconfdir}/modprobe.d/90-mtgpu-headless.conf
 install -D -m 0644 70-mtgpu.rules %{buildroot}%{_udevrulesdir}/70-mtgpu.rules
 
+# The mtgpu module writes event reports and FEC debug logs to /var/log/mtgpu
+# and logs ENOENT warnings at every load when the directory is absent
+# (observed 2026-11-23 on the S30 host). Create it at boot and at package
+# install so the vendor logging works from any load path, including an
+# initramfs-time load.
+mkdir -p %{buildroot}%{_tmpfilesdir}
+cat > %{buildroot}%{_tmpfilesdir}/mtgpu.conf <<'MTGPU_TMPFILES'
+d /var/log/mtgpu 0755 root root -
+d /var/log/mtgpu/event_report 0755 root root -
+MTGPU_TMPFILES
+
 %files
 %defattr(-,root,root,-)
 %doc README.md
 /usr/src/mtgpu-%{version}/
 %config(noreplace) %{_sysconfdir}/modprobe.d/90-mtgpu-headless.conf
 %{_udevrulesdir}/70-mtgpu.rules
+%{_tmpfilesdir}/mtgpu.conf
 
 %post
 # Register, build and install for the running kernel. Failures are reported but
@@ -151,6 +163,7 @@ if [ "$1" -ge 1 ]; then
     dkms build   -m mtgpu -v %{version} -k "$(uname -r)" --force || :
     dkms install -m mtgpu -v %{version} -k "$(uname -r)" --force || :
 fi
+install -d -m 0755 /var/log/mtgpu/event_report 2>/dev/null || :
 depmod -a >/dev/null 2>&1 || :
 
 %preun
@@ -162,6 +175,12 @@ fi
 depmod -a >/dev/null 2>&1 || :
 
 %changelog
+* Mon Nov 23 2026 MUSA Fedora Team <musa@fedoraproject.org> - 3.1.0-12
+- Ship a tmpfiles.d entry creating /var/log/mtgpu and /var/log/mtgpu/event_report,
+  and create them in %post. The mtgpu module writes event reports and FEC debug
+  files there and logged ENOENT warnings at every load when the directory was
+  absent (observed 2026-11-23 on the S30 host, kernel 7.3.4).
+
 * Fri Nov 20 2026 MUSA Fedora Team <musa@fedoraproject.org> - 3.1.0-11
 - Disable the rpmbuild BRP strip hooks. Releases 6 through 9 silently
   mangled the vendor core object in the payload: rpmbuild's automatic

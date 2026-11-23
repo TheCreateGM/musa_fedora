@@ -26,12 +26,49 @@ MCC="${MCC:-$MUSA_SDK/bin/mcc}"
 mkdir -p "$TARGET"
 rc=0
 
+# The S30 runs the MUSA 1.5.4 runtime (libmusart.so.1.5). The 5.2.0 SDK
+# carries a different runtime (libmusart.so.5) whose ABI does not match the
+# 3.1.0 mtgpu driver: a binary linked against it aborts inside musaMalloc()
+# and makes the driver log "Invalid cmd_type".  Link against the runtime that
+# is actually installed and verify the result, so a wrong soname is a build
+# error instead of a runtime abort.
+EXPECTED_MUSART_SONAME=""
+if [[ -f "$MUSA_RT_LIB/libmusart.so" ]]; then
+    EXPECTED_MUSART_SONAME="$(objdump -p "$MUSA_RT_LIB/libmusart.so" 2>/dev/null \
+        | awk '/SONAME/ {print $2; exit}')"
+fi
+
+check_runtime_link() {
+    local name="$1" bin="$TARGET/$1" needed
+    [[ -n "$EXPECTED_MUSART_SONAME" ]] || {
+        echo "  SKIP runtime check: cannot read the SONAME of $MUSA_RT_LIB/libmusart.so"
+        return 0
+    }
+    if ! needed="$(readelf -d "$bin" 2>/dev/null | awk '/NEEDED/ {print $NF}' | tr -d '[]')"; then
+        echo "  FAILED: cannot read the dynamic section of $name"; rc=1; return 0
+    fi
+    if ! grep -qx "$EXPECTED_MUSART_SONAME" <<<"$needed"; then
+        echo "  FAILED: $name does not link the installed MUSA runtime"
+        echo "         expected DT_NEEDED $EXPECTED_MUSART_SONAME from $MUSA_RT_LIB"
+        echo "         got: $(tr '\n' ' ' <<<"$needed")"
+        echo "         a binary linked against the 5.2.0 SDK runtime (libmusart.so.5)"
+        echo "         aborts inside musaMalloc() against the 3.1.0 mtgpu driver"
+        rc=1
+        return 0
+    fi
+    if grep -q "libmusart.so.5" <<<"$needed"; then
+        echo "  FAILED: $name also links the incompatible 5.2.0 runtime"; rc=1; return 0
+    fi
+    echo "  OK (links $EXPECTED_MUSART_SONAME)"
+}
+
 build_host() {
     local name="$1" src="$ROOT/tests/$2"; shift 2
     echo "building $name from $src"
     if gcc -O2 -Wall "$src" -I"$MUSA_RT_INC" -L"$MUSA_RT_LIB" "$@" \
         -Wl,-rpath,"$MUSA_RT_LIB" -o "$TARGET/$name"; then
         echo "  OK"
+        check_runtime_link "$name"
     else
         echo "  FAILED"; rc=1
     fi
@@ -44,6 +81,7 @@ build_mcc() {
         -L"$MUSA_RT_LIB" -lmusart -Wl,-rpath,"$MUSA_RT_LIB" \
         -o "$TARGET/$name" "$src"; then
         echo "  OK"
+        check_runtime_link "$name"
     else
         echo "  FAILED"; rc=1
     fi

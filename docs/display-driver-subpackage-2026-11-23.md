@@ -51,6 +51,17 @@ chroot lists both `musa-runtime` and `musa-runtime-display`:
 | fedora-eln-x86_64 | succeeded, both RPMs | succeeded, both RPMs |
 | fedora-rawhide-x86_64 | succeeded, both RPMs | succeeded, both RPMs |
 
+The Fedora 45 RPMs were downloaded from the project's Pulp repository and
+inspected with `rpm -qpl`/`rpm -qpR`:
+
+- `musa-runtime-1.5.4-4.fc45.x86_64.rpm` contains **no** files under
+  `/usr/lib64/dri`, `/usr/lib64/gbm` or `/usr/lib64/xorg`, but does contain
+  `musaInfo`, `mthreads-gmi`, `libdrm_mtgpu.so*` and the Vulkan ICD.
+- `musa-runtime-display-1.5.4-4.fc45.x86_64.rpm` contains all eight DRI
+  drivers (including `musa_dri.so` and `kms_swrast_musa_dri.so`),
+  `mtgpu_gbm.so` and `mtgpu_drv.so`, and requires
+  `musa-runtime = 1.5.4-4.fc45`.
+
 A successful build only proves that the RPMs are produced; it does not prove
 that the driver is safe to load or that the desktop survives a load.
 

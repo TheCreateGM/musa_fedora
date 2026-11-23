@@ -69,9 +69,11 @@ contains this driver error. Do not repeat the failed 5.2.0-runtime invocation.
 MUSA_S30_TEST_APPROVED=1 ./scripts/test-gpu.sh
 ```
 
-- All gates passed first (IBT on, clean boot journal, S30 at the expected BDF
-  bound to the full `mtgpu` module). The approval flag is the documented
-  gate from `docs/clean-boot-resume-plan-2026-11-17.md`.
+- The then-current gates passed first (IBT on, S30 at the expected BDF bound
+  to the full `mtgpu` module). That version checked for Oops/BUG but did not
+  reject the earlier userspace ABI-mismatch `Invalid cmd_type` entries; the
+  current script adds that fail-closed check. The approval flag was the
+  documented gate from `docs/clean-boot-resume-plan-2026-11-17.md`.
 - Runtime 1.5.4 `musaInfo` reported the MTT S30: 4096 MiB, 1300 MHz,
   warp 128, computeMode 0, free 3.69 GB (93%).
 - `MUSA_VECTOR_ADD_OK elements=1048576` — vector-add, copy, allocation and
@@ -95,8 +97,11 @@ absent by policy after the documented archived-ICD kernel Oops.
 
 ## Post-run system health
 
-- Kernel journal since 08:39 UTC: no `Oops:`, `BUG:`, NULL dereference or
-  general-protection fault; `mtgpu` only logs the cosmetic IRQ-affinity message.
+- Kernel journal after 08:39 UTC: no additional `Invalid cmd_type`, `Oops:`,
+  `BUG:`, NULL dereference or general-protection fault; `mtgpu` only logs the
+  cosmetic IRQ-affinity message. The two earlier ABI-mismatch entries remain in
+  this boot's journal, so the updated smoke-test gate blocks another GPU run
+  until a clean boot.
 - GNOME Shell survived (`pgrep -c gnome-shell` → 2, GDM active).
 - `mthreads-gmi` 2.0.0 answered: Driver Version 3.1.0, MTT S30, 44 C,
   262 MiB / 4096 MiB in use, no processes.

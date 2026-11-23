@@ -1,11 +1,12 @@
 # MUSA on Fedora — MTT S30
 
 MUSA driver/runtime packaging and test sources for the **Moore Threads MTT S30**
-(`1ed5:0102`) on Fedora. The latest live host inventory is Fedora 45 / kernel
-`7.3.4-300.fc45.x86_64`; it found the S30 unbound and MUSA GPU tests blocked.
-See the [latest live recheck](docs/live-host-recheck-2026-11-20-session-1549.md),
-the [full host status](docs/current-state-2026-11-20.md), and the
-[2026-11-23 Live USB validation/build report](docs/session-2026-11-23-live-usb-validation.md).
+(`1ed5:0102`) on Fedora. The host is Fedora 45 / kernel `7.3.4-300.fc45.x86_64`. The 2026-11-23
+controlled test loaded `mtgpu` for validation; that module remains live in this
+boot, while a normal reboot returns to the intentionally blacklisted, unbound
+state. See the [current S30 suite record](docs/hardware-validation-2026-11-23-suite-verify.md),
+[full host status](docs/current-state-2026-11-20.md), and the
+[Live USB validation/build report](docs/session-2026-11-23-live-usb-validation.md).
 For the repair of the installed system's disk boot (GDM crash caused by an
 auto-loaded `mtgpu`), see [the 2026-11-23 boot fix](docs/boot-fix-2026-11-23.md).
 
@@ -28,7 +29,7 @@ survived the load, and no kernel fault was logged** — see
   `/dev/nvme0n1p7` on kernel `7.3.4-300.fc45.x86_64`, GNOME runs on Intel
   `i915`, and `mtgpu` stays unloaded with the boot-time block in place.
 - **All 9 configured COPR chroots verified**, for both `axogm/musa-fedora` and
-  `axogm/musa-mtt-s30`: every package build reports `succeeded` and every
+  `axogm/musa-mtt-s30` (11 checks including both projects' build status): every package build reports `succeeded` and every
   chroot's published repository advertises `musa-runtime 1.5.4-4`,
   `musa-runtime-display 1.5.4-4`, `musa-sdk 5.2.0-6`, `musa-toolkit 3.1.0-3`,
   `mtgpu-dkms 3.1.0-12` and `mtgpu-firmware 3.1.0-4`. Re-run it with
@@ -51,8 +52,13 @@ survived the load, and no kernel fault was logged** — see
   vendor DRI drivers and that 1.5.4-4 fixes it; see
   [the 1.5.4-4 load-test evidence](docs/hardware-validation-2026-11-23-runtime154-load-test.md).
   The boot-time block was still in place during that run; removing it
-  permanently via `compute-mode.sh enable` remains a separate, explicitly
-  approved change.
+  permanently via `compute-mode.sh enable` remains a separate change requiring
+  explicit approval. The subsequent full-suite record documents two earlier
+  userspace aborts from the incompatible SDK `libmusart.so.5` ABI; corrected
+  1.5.4-linked tests passed without an Oops/BUG. The smoke-test script now
+  checks both executable SONAMEs before device initialization and blocks after
+  `Invalid cmd_type` entries in the current boot journal; do not rerun GPU
+  workloads until a reviewed recovery plan and clean boot.
 
 The project targets the vendor's own S30 stack — **mtgpu driver 3.1.0** plus
 **MUSA runtime 1.5.4** from `musa_3.1.0-pc_x86.deb` — and codes kernels with the
@@ -196,10 +202,12 @@ recheck. Do not use the 5.2.0 runtime for S30 execution.
 
 * The recorded tests are read-only apart from temporary files and do not install
   packages, change boot settings, or load/unload/rebind kernel modules.
-* Current host state (2026-11-20): the S30 is unbound and `mtgpu` is
-  blacklisted to protect the Intel-driven GNOME desktop after prior KMS
-  crashes. No current-boot GPU test ran. See
-  [the live inventory](docs/current-state-2026-11-20.md). Do not remove the
+* In the 2026-11-23 controlled test boot, the S30 is bound to the already-live
+  `mtgpu` module; that boot also contains two historical `Invalid cmd_type`
+  reports from the incompatible 5.2.0 runtime ABI. The smoke test refuses to
+  run again in this boot. A normal reboot restores the blacklist and unbound
+  state. See [the live inventory](docs/current-state-2026-11-20.md) and
+  [suite record](docs/hardware-validation-2026-11-23-suite-verify.md). Do not remove the
   blacklist or load/unbind/rebind the driver without a reviewed recovery plan;
   the draft plan is
   [docs/maintenance-plan-mtgpu-load-2026-11-20.md](docs/maintenance-plan-mtgpu-load-2026-11-20.md)

@@ -6,7 +6,7 @@
 
 Name:           musa-runtime
 Version:        1.5.4
-Release:        3%{?dist}
+Release:        4%{?dist}
 Summary:        MUSA runtime userspace for Moore Threads GPUs (MTT S30)
 
 License:        Proprietary
@@ -37,12 +37,26 @@ mtgpu 3.1.0 kernel driver.
 Contents:
 - /usr/local/musa            libmusart.so.1.5.4, libmusa.so.1.5.4, musaInfo,
                              muMemcpyTest, musa_runtime_version, headers
-- /usr/lib64                 libdrm_mtgpu, mesa GL/Vulkan MUSA drivers,
+- /usr/lib64                 libdrm_mtgpu, mesa GL/Vulkan MUSA libraries,
                              libcapture_musa, libencode_musa, libvideo_musa
-- /usr/lib64/dri, /usr/lib64/gbm, /usr/lib64/xorg/modules/drivers
-                             MUSA DRI/GBM/Xorg drivers
 - /usr/bin/mthreads-gmi      management/monitoring tool
 - /etc                       modprobe, sysctl, Vulkan ICD and linker settings
+
+The display drivers (DRI/GBM/Xorg) are shipped separately in the optional
+musa-runtime-display subpackage. On a headless compute host they must NOT be
+installed: when mtgpu is loaded, Mesa loads these drivers for the S30 DRM card
+and GNOME Shell/mutter segfaults in its KMS thread. The compute runtime,
+Vulkan ICD and test tools do not need them.
+
+%package display
+Summary:        MUSA Mesa DRI/GBM/Xorg display drivers for Moore Threads GPUs
+Requires:       %{name} = %{version}-%{release}
+
+%description display
+Optional vendor Mesa DRI, GBM and Xorg drivers for the MTT S30 and other Moore
+Threads GPUs. Install this subpackage only if the S30's own display outputs are
+to be used. On a compute-only host with the desktop on i915/amdgpu, installing
+these drivers causes GNOME Shell to crash when mtgpu is loaded.
 
 The matching kernel driver is in mtgpu-dkms (3.1.0) and the firmware is in
 mtgpu-firmware. Use musa-toolkit to pull in the complete stack.
@@ -106,9 +120,6 @@ sysctl --system >/dev/null 2>&1 || true
 /usr/local/include/
 /usr/local/share/
 /usr/lib64/lib*.so*
-/usr/lib64/dri/
-/usr/lib64/gbm/
-/usr/lib64/xorg/
 /usr/bin/mthreads-gmi
 %config(noreplace) %{_sysconfdir}/modprobe.d/mtgpu.conf
 %config(noreplace) %{_sysconfdir}/sysctl.d/99-musa.conf
@@ -116,7 +127,20 @@ sysctl --system >/dev/null 2>&1 || true
 %config(noreplace) %{_sysconfdir}/vulkan/icd.d/musaicdconf.json
 %config(noreplace) %{_sysconfdir}/ld.so.conf.d/musa-runtime.conf
 
+%files display
+%defattr(-,root,root,-)
+/usr/lib64/dri/
+/usr/lib64/gbm/
+/usr/lib64/xorg/
+
 %changelog
+* Mon Nov 23 2026 MUSA Fedora Team <musa@fedoraproject.org> - 1.5.4-4
+- Move the vendor Mesa DRI, GBM and Xorg drivers into the optional
+  musa-runtime-display subpackage. The 2026-11-23 load test on the installed
+  system showed that GNOME Shell crashes in its KMS thread when Mesa picks
+  up these drivers for the S30 DRM card. Compute-only users now install the
+  base runtime without the display drivers.
+
 * Tue Nov 17 2026 MUSA Fedora Team <musa@fedoraproject.org> - 1.5.4-3
 - Drop the obsolete mesa-libglapi package requirement. Fedora 44 and newer
   no longer publish that subpackage, and this runtime ships its own

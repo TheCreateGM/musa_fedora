@@ -13,7 +13,9 @@ A controlled load test on the installed system on 2026-11-23 ran the full MUSA
 workload successfully on the S30; see the
 [2026-11-23 load-test evidence](docs/hardware-validation-2026-11-23-load-test.md).
 That test did not change the boot-time blacklist and does not enable compute on
-a normal boot.
+a normal boot. To avoid the Mesa/GNOME crash seen there, the vendor display
+drivers now live in an opt-in `musa-runtime-display` subpackage; see the
+[display-driver split](docs/display-driver-subpackage-2026-11-23.md).
 
 The project targets the vendor's own S30 stack — **mtgpu driver 3.1.0** plus
 **MUSA runtime 1.5.4** from `musa_3.1.0-pc_x86.deb` — and codes kernels with the

@@ -41,7 +41,13 @@ the installed 3.1.0-2 blobs. `musa-toolkit` was re-released as `3.1.0-3`
 and [11365856](https://copr.fedorainfracloud.org/coprs/build/11365856)) with
 an honest, historical-results-only description. Both RPMs verified
 `digests signatures OK` against the project Copr key.
-See [`docs/current-state-2026-11-20.md`](docs/current-state-2026-11-20.md) and
+The later [same-day live recheck](docs/live-host-recheck-2026-11-20-session-1549.md)
+confirms the currently installed DKMS package is 3.1.0-11 (not release 7),
+but the S30 remains unbound and blacklisted. A fresh isolated build for the
+running 7.3.4 kernel and MUSA `mp_10` compile/header checks passed; the module
+was not installed or loaded, and no runtime or GPU workload was run. The
+physical-load plan remains unapproved. See also
+[`docs/current-state-2026-11-20.md`](docs/current-state-2026-11-20.md) and
 [`docs/root-cause-rm-feature-level-2026-11-20.md`](docs/root-cause-rm-feature-level-2026-11-20.md).
 
 ## Historical host status — 2026-11-17 (superseded)

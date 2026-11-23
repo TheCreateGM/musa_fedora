@@ -7,6 +7,53 @@ prior DRM/KMS crashes; MUSA GPU workloads are not currently available. See the
 [current live status](docs/current-state-2026-11-20.md). This guide describes
 package workflows and IOMMU setup; it does not authorize loading the driver.
 
+## Supported Fedora releases and architectures
+
+| COPR project | Chroots | Architecture |
+|---|---|---|
+| `axogm/musa-fedora` | Fedora 44, 45, ELN, Rawhide | x86_64 |
+| `axogm/musa-mtt-s30` | Fedora 43, 44, 45, ELN, Rawhide | x86_64 |
+
+Both projects are community builds; no aarch64 chroot is configured and the
+vendor payload is x86_64 only. Fedora 45 is the release with historical S30
+hardware evidence. Other chroots are build-tested in COPR but are not
+vendor-qualified or hardware-validated.
+
+## Install from COPR
+
+```sh
+pkexec dnf install dnf-plugins-core
+pkexec dnf copr enable axogm/musa-fedora      # Fedora 44/45/ELN/Rawhide
+pkexec dnf copr enable axogm/musa-mtt-s30     # adds Fedora 43
+pkexec dnf install musa-toolkit
+```
+
+`musa-toolkit` is a metapackage that pulls in `mtgpu-dkms`, `mtgpu-firmware`,
+`musa-runtime` and `musa-sdk`. Installing these packages does **not** load
+`mtgpu`, rebind the GPU, or change boot arguments. The driver remains
+blacklisted until a separately approved maintenance window; see
+[the host status](docs/current-state-2026-11-20.md) before attempting a load.
+
+## Build dependencies
+
+The DKMS package needs `dkms >= 2.8`, `kernel-devel`, `gcc`, `make`,
+`elfutils-libelf-devel`, `openssl-devel`, `kmod` and `systemd-rpm-macros`.
+The SDK requires `gcc-c++` at runtime for linking host programs. Runtime
+packages depend on the Fedora base libraries, `libdrm`, `zlib`, `ldconfig`
+and `linux-firmware`. To build RPMs locally you need `rpm-build`, `gcc`,
+`make` and the matching `kernel-devel` for the DKMS binary package.
+
+## Build from source / SRPMs
+
+```sh
+packaging/rpm/build-all.sh --srpm-only    # five SRPMs, no kernel-devel needed
+TMPDIR=/var/tmp packaging/rpm/build-all.sh  # full local build (needs kernel-devel)
+```
+
+The SRPMs are what get submitted to COPR; COPR rebuilds the binary packages in
+each clean chroot. See [the current status report](docs/current-state-2026-11-20.md)
+for the actual build IDs and results.
+
 ## Package-managed install and removal
 
 The validated Fedora RPMs are built from this tree under

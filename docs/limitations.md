@@ -1,7 +1,9 @@
 # Feature boundary and limitations
 
 The latest live state is recorded in
-[current-state-2026-11-20.md](current-state-2026-11-20.md).
+[current-state-2026-11-20.md](current-state-2026-11-20.md); the most recent
+session's build and safety results are in
+[session-2026-11-23-live-usb-validation.md](session-2026-11-23-live-usb-validation.md).
 
 ## Historical hardware validation (2026-11-17; not current host state)
 

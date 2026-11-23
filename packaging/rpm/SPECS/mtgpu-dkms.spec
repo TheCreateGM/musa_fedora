@@ -1,8 +1,18 @@
 %define debug_package %{nil}
+# The vendor core object (objs/x86_64/mtgpu_core.o_binary) is an opaque,
+# pre-compiled ELF blob. Fedora's automatic binary re-packaging (BRP) strip
+# pass rewrites such objects, so every DKMS payload published up to release 9
+# differed from the pinned vendor bytes (33 sections with debug_info shrank
+# to 22; sha256 d0fdace... became 31bb853f...). Disable the strip hooks so
+# the installed source tree keeps the core byte-identical to the pinned
+# blob, mirroring the mtgpu-firmware 3.1.0-4 fix for GPU ELF payloads.
+%global __brp_strip %{nil}
+%global __brp_strip_comment_note %{nil}
+%global __brp_strip_static_archive %{nil}
 
 Name:           mtgpu-dkms
 Version:        3.1.0
-Release:        9%{?dist}
+Release:        11%{?dist}
 Summary:        DKMS kernel driver source for Moore Threads GPUs (mtgpu)
 
 License:        GPL-2.0-only
@@ -132,10 +142,14 @@ install -D -m 0644 70-mtgpu.rules %{buildroot}%{_udevrulesdir}/70-mtgpu.rules
 # do not abort the transaction: on a machine without this GPU, or without a
 # matching kernel-devel tree, "modprobe mtgpu" later still works after a
 # "dkms autoinstall" once kernel-devel is in place.
-if [ "$1" -eq 1 ]; then
+# $1 is 1 on first install and 2 on upgrade. The previous release only
+# rebuilt on first install ("-eq 1"), so upgrading an installed DKMS package
+# left the old module in /lib/modules while replacing /usr/src/mtgpu-*.
+# Rebuild and reinstall for the running kernel on both paths.
+if [ "$1" -ge 1 ]; then
     dkms add     -m mtgpu -v %{version} --rpm_safe_upgrade || :
-    dkms build   -m mtgpu -v %{version} || :
-    dkms install -m mtgpu -v %{version} --force || :
+    dkms build   -m mtgpu -v %{version} -k "$(uname -r)" --force || :
+    dkms install -m mtgpu -v %{version} -k "$(uname -r)" --force || :
 fi
 depmod -a >/dev/null 2>&1 || :
 
@@ -148,6 +162,22 @@ fi
 depmod -a >/dev/null 2>&1 || :
 
 %changelog
+* Fri Nov 20 2026 MUSA Fedora Team <musa@fedoraproject.org> - 3.1.0-11
+- Disable the rpmbuild BRP strip hooks. Releases 6 through 9 silently
+  mangled the vendor core object in the payload: rpmbuild's automatic
+  strip pass removed 11 ELF sections from mtgpu_core.o_binary, so the
+  installed /usr/src tree (and any module DKMS links from it) carried a
+  vendor core that matched no pinned hash and had never been hardware
+  tested. The payload is now required to be byte-identical to the pinned
+  core d0fdaceab37bce7387d376f8a87a2e9dbf210eeccf4f4f7c67f8dee83f4e8200.
+
+* Fri Nov 20 2026 MUSA Fedora Team <musa@fedoraproject.org> - 3.1.0-10
+- Run the DKMS add/build/install step on package upgrade as well as first
+  install. The release 9 scriptlet only acted when $1 -eq 1, so upgrading an
+  installed package replaced /usr/src/mtgpu-3.1.0 without rebuilding the
+  module in /lib/modules. Build/install now target the running kernel and
+  force a rebuild so the on-disk module matches the packaged source.
+
 * Fri Nov 20 2026 MUSA Fedora Team <musa@fedoraproject.org> - 3.1.0-9
 - Remove the unsupported claim that the module is safe to load on IBT/CET
   kernels based on its GNU property note. The opaque vendor core continues to

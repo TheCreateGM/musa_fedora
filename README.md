@@ -3,7 +3,9 @@
 MUSA driver/runtime packaging and test sources for the **Moore Threads MTT S30**
 (`1ed5:0102`) on Fedora. The latest live host inventory is Fedora 45 / kernel
 `7.3.4-300.fc45.x86_64`; it found the S30 unbound and MUSA GPU tests blocked.
-See [the 2026-11-20 live status](docs/current-state-2026-11-20.md).
+See the [latest live recheck](docs/live-host-recheck-2026-11-20-session-1549.md),
+the [full host status](docs/current-state-2026-11-20.md), and the
+[2026-11-23 Live USB validation/build report](docs/session-2026-11-23-live-usb-validation.md).
 
 The project targets the vendor's own S30 stack — **mtgpu driver 3.1.0** plus
 **MUSA runtime 1.5.4** from `musa_3.1.0-pc_x86.deb` — and codes kernels with the
@@ -17,9 +19,11 @@ The project targets the vendor's own S30 stack — **mtgpu driver 3.1.0** plus
 **Current host:** S30 is present but unbound. `/etc/modprobe.d/blacklist-mtgpu.conf`
 intentionally blocks the driver because prior driver loads caused GNOME/KMS
 crashes; prior vendor-core faults also make ad-hoc load/rebind unsafe. The
-read-only hardware check and gated GPU test both report NOT RUN/BLOCKED. No
-workload was executed in the current boot. The following rows describe only
-recorded, historical 2026-11-17 results, not the current boot state.
+read-only hardware check and gated GPU test both report NOT RUN/BLOCKED. In the
+2026-11-20 recheck, the isolated 7.3.4 driver build and MUSA 5.2.0 `mp_10`
+compile/header checks passed, but no driver was installed or loaded and no GPU
+workload ran. The following hardware rows describe only recorded, historical
+2026-11-17 results, not the current boot state.
 
 | Layer | State | Evidence |
 |---|---|---|
@@ -103,12 +107,13 @@ recheck. Do not use the 5.2.0 runtime for S30 execution.
 * The verified host uses the vendor mtgpu 3.1.0 stack and MUSA runtime 1.5.4;
   MUSA 5.2.0 is used only for its compiler/headers. The 5.2 runtime is not
   compatible with this 3.1.0 driver ABI; do not substitute it for runtime 1.5.4.
-* The host-installed package set is `mtgpu-dkms` 3.1.0-7,
+* The host-installed package set is `mtgpu-dkms` 3.1.0-11,
   `mtgpu-firmware` 3.1.0-2,
   `musa-runtime` 1.5.4-3, `musa-sdk` 5.2.0-6, and `musa-toolkit` 3.1.0-1.
-  The host deliberately stays on these releases until the driver-loading
-  maintenance plan is approved; current Copr releases (`mtgpu-firmware`
-  3.1.0-4, `musa-toolkit` 3.1.0-3) are verified builds only.
+  No package transaction was performed during the latest recheck. The
+  `mtgpu` module remains blacklisted and unloaded; the maintenance plan for
+  physical loading is still unapproved. Newer firmware/toolkit package builds
+  are not evidence of runtime compatibility.
   Current spec releases, Copr build states, target chroots, and known compiler
   warnings are recorded in the [live status](docs/current-state-2026-11-20.md);
   successful builds do not imply current GPU functionality.

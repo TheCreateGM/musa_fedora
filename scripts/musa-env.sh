@@ -56,16 +56,18 @@ else
     MUSA_HOST_INCLUDE_PATH="${MUSA_HOST_INCLUDE_PATH:-$MUSA_RUNTIME_HOME/include}"
     MUSA_COMPILER_INCLUDE="${MUSA_COMPILER_INCLUDE:-$MUSA_HOME/include}"
     MUSA_RT_LIB_PATH="${MUSA_RT_LIB_PATH:-$MUSA_RUNTIME_HOME/lib}"
-    PATH="$MUSA_HOME/bin:$PATH"
     # The supported S30 runtime (1.5.4) and compiler (5.2.0) live in separate
-    # prefixes. Put the compatible runtime first: /etc/profile.d/musa.sh may
-    # have added the 5.2 runtime ahead of it, which can crash the 1.5.4 tools.
+    # prefixes. Put the compatible runtime first in both PATH and
+    # LD_LIBRARY_PATH: /etc/profile.d/musa.sh puts the 5.2 prefix first, and
+    # the 5.2 musaInfo links libmusart.so.5, which aborts against the 3.1.0
+    # driver / 1.5.4 runtime. Sourcing this file must select the 1.5.4 tools.
     if [[ ! -d "$MUSA_RT_LIB_PATH" ]]; then
         printf 'MUSA compatibility runtime library directory not found: %s\n' \
             "$MUSA_RT_LIB_PATH" >&2
         return 1
     fi
     _MUSA_NEW_LIB_PATH="$MUSA_RT_LIB_PATH:$MUSA_HOME/lib"
+    PATH="$MUSA_RUNTIME_HOME/bin:$MUSA_HOME/bin:$PATH"
 fi
 
 MUSA_PATH="$MUSA_HOME"

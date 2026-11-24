@@ -5,6 +5,17 @@
 **Packages:** `mtgpu-dkms` 3.1.0-12, `mtgpu-firmware` 3.1.0-4,
 `musa-runtime` 1.5.4-5, `musa-sdk` 5.2.0-6, `musa-toolkit` 3.1.0-3
 
+> **Resolution (2026-11-24 05:45 UTC boot):** on a clean boot in which udev
+> autoloaded `mtgpu` exactly once — no live-module replacement — the same
+> `mthreads-gmi` 2.0.0 binary initializes mtml successfully and reports the
+> card (`Driver Version 3.1.0`, 45 °C, 262/4096 MiB). The EINVAL failure is
+> **state-dependent, not permanent**: it is associated with boots in which the
+> module is replaced while a previous instance already initialized the
+> hardware. `scripts/verify-musa.sh` passes its telemetry check again
+> (14 passed, 0 failed, 1 skipped). Treat the tool as working on clean boots
+> and as unvalidated in live-replacement boots. The ioctl analysis below
+> remains the record of what the failing path does.
+
 ## Symptom
 
 The module is live (`/sys/module/mtgpu/initstate` = `live`, `/dev/mtgpu.0`
@@ -109,14 +120,16 @@ Earlier reports (`docs/hardware-validation-2026-11-23-runtime154-load-test.md`,
 `docs/hardware-validation-2026-11-23-suite-verify.md`) record
 `mthreads-gmi -q` returning 0 and reporting the card. That result could not
 be reproduced on 2026-11-24 with the current module and tool; the ioctl
-evidence above is what the current stack actually does. Treat
-`mthreads-gmi` as **not working** until a vendor update or a documented
-workaround is verified on hardware.
+evidence above is what the current stack actually does. **Updated later the
+same day:** a clean 05:45 UTC boot (single udev autoload, no live-module
+replacement) reproduces the *tool working* — see the Resolution note at the
+top. The failure is associated with live-replacement boots, not with the
+current stack in general.
 
 ## Workaround / alternative telemetry
 
-Until the vendor mismatch is resolved, read the same facts from stable
-interfaces:
+Until a live-replacement boot needs telemetry, read the same facts from
+stable interfaces:
 
 ```sh
 lspci -nnk -d 1ed5:0102          # device, subsystem, bound driver

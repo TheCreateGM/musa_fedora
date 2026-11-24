@@ -95,14 +95,18 @@ vector-add, the eight-kernel compute suite, FP64 and headless Vulkan all pass.
 *and* from the live initramfs, udev resolves the S30 to `kmod load mtgpu`, the
 module is live and the full MUSA workload passes with GNOME running.
 
-**Still to confirm on the next boot:** that udev loads `mtgpu` before GDM and
-that GNOME still reaches the login screen. The two ingredients are already
-independently verified — automatic udev load of `mtgpu` (2026-11-23 boot) and
-coexistence of a live `mtgpu` with GNOME when the vendor DRI files are absent
-(the 2026-11-23 and 2026-11-24 controlled loads) — but the exact
-"autoload + no-DRI package" boot has not been observed yet in this session.
+**Confirmed on the 2026-11-24 05:45 UTC boot:** udev loaded `mtgpu`
+(`initstate=live`), `0000:01:00.0` was bound, `/dev/mtgpu.0` and
+`/dev/dri/renderD130` existed, `gdm`/`graphical.target` were active and GNOME
+reached the login screen, and the kernel log of that boot contains no
+`BUG`/`Oops`/`Invalid cmd_type` entry. `scripts/verify-musa.sh` reported
+**14 passed, 0 failed, 1 skipped** — one check better than the expectation
+below because `mthreads-gmi` also worked on this clean boot. Full evidence:
+[boot-verify-fix-2026-11-24](boot-verify-fix-2026-11-24.md). The one gap in
+that boot was the boot-verify service itself, which systemd deleted due to an
+ordering cycle; the unit has been fixed and reinstalled for the next reboot.
 
-After the next reboot, check:
+**Original checklist for the first reboot with compute mode:**
 
 ```sh
 lspci -k -s 01:00.0                  # expect: Kernel driver in use: mtgpu

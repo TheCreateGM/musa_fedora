@@ -41,6 +41,15 @@ while (($#)); do
 done
 
 mkdir -p "$OUT_DIR" 2>/dev/null || OUT_DIR="${TMPDIR:-/tmp}"
+# The write must actually work: /var/log/musa-fedora is root-owned and the
+# systemd unit runs the script as root, but a manual run as a normal user
+# would otherwise lose the whole log (exec >> fails, script keeps running).
+if ! touch "$OUT_DIR/.boot-verify-write-test" 2>/dev/null; then
+    printf '%s\n' "note: $OUT_DIR not writable, writing to ${TMPDIR:-/tmp}" >&2
+    OUT_DIR="${TMPDIR:-/tmp}"
+else
+    rm -f "$OUT_DIR/.boot-verify-write-test"
+fi
 BOOT_ID="$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)"
 TS="$(date -u +%Y%m%dT%H%M%SZ)"
 LOG="$OUT_DIR/compute-mode-boot-$TS.log"
@@ -124,10 +133,17 @@ done
 
 # ------------------------------------------------------------------- session
 hdr "4. desktop session (must survive the live driver)"
+# The unit is ordered after display-manager.service, but "active" precedes
+# the login screen; poll briefly so an early run is not a false failure.
+deadline=$(( $(date +%s) + WAIT_SECS ))
+until systemctl is-active --quiet gdm 2>/dev/null; do
+    (( $(date +%s) < deadline )) || break
+    sleep 2
+done
 if systemctl is-active --quiet gdm 2>/dev/null; then
     ok "gdm is active"
 else
-    bad "gdm is not active"
+    bad "gdm is not active within ${WAIT_SECS}s"
 fi
 if systemctl is-active --quiet graphical.target 2>/dev/null; then
     ok "graphical.target is active"

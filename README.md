@@ -18,6 +18,30 @@ old base package shipping vendor Mesa DRI drivers), see
 
 ### Updates — 2026-11-24 (session)
 
+- **Compute mode survived its first real reboot (05:45 UTC, clean boot).**
+  udev autoloaded `mtgpu`, GNOME reached the login screen on `i915`, the
+  kernel log has no fault, `scripts/compute-mode-boot-verify.sh` reports
+  **14 passed, 0 failed, 0 warnings**, and `scripts/verify-musa.sh` reports
+  **14 passed, 0 failed, 1 skipped** (OpenCL skip, no MT ICD). See
+  [boot-verify-fix-2026-11-24](docs/boot-verify-fix-2026-11-24.md).
+- **`mthreads-gmi` works on the clean boot.** The EINVAL failure recorded
+  earlier today was state-dependent (live-module-replacement boots), not
+  permanent: the same tool now reports the S30 (Driver 3.1.0, 45 °C,
+  262/4096 MiB) and the telemetry check passes. The
+  [root-cause doc](docs/root-cause-mthreads-gmi-drm-query-2026-11-24.md) is
+  updated with the resolution.
+- **Boot-verify service fixed and reinstalled.** systemd had deleted the
+  one-shot job because the unit ordered itself `After=graphical.target` while
+  being wanted by `multi-user.target` (ordering cycle) — no boot evidence was
+  captured. The unit now orders only after `display-manager.service`, the
+  script polls for `gdm` and falls back when the log directory is not
+  writable; `systemd-analyze verify` passes and the service is enabled for
+  the next reboot.
+- **COPR re-verified (20/20 checks pass, 9/9 chroots).** Both projects now
+  publish `mtgpu-dkms` 3.1.0-13 (comment/changelog-only delta from -12) plus
+  `musa-runtime` 1.5.4-5, `musa-sdk` 5.2.0-6, `musa-toolkit` 3.1.0-3,
+  `mtgpu-firmware` 3.1.0-4. The host stays on `mtgpu-dkms` 3.1.0-12 until its
+  next reboot window (the -13 delta is not a functional change).
 - **`musa-runtime` 1.5.4-5 installed and validated.** It ships
   `/etc/profile.d/zz-musa-fedora.sh`, which puts the 1.5.4 runtime before the
   5.2.0 compiler prefix in login shells; the unowned legacy
@@ -27,7 +51,8 @@ old base package shipping vendor Mesa DRI drivers), see
   **13 passed, 1 failed, 1 skipped** on the live S30. The single failure is the
   vendor `mthreads-gmi` telemetry tool (DRM ioctl skew, root cause recorded);
   `musaInfo`, `muMemcpyTest`, the runtime API, `mp_10` vector-add, the compute
-  suite, FP64 and headless Vulkan all pass.
+  suite, FP64 and headless Vulkan all pass. *(Superseded later the same day:
+  the 05:45 UTC clean boot passes 14/0/1 — see the first bullet above.)*
 - **Compute mode enabled** (02:08 UTC): blacklist moved to
   `/var/backups/musa-fedora-compute-mode/20261124T020848Z/`, initramfs
   regenerated; udev resolves the S30 to `kmod load mtgpu` and GNOME survived
@@ -96,7 +121,8 @@ The project targets the vendor's own S30 stack — **mtgpu driver 3.1.0** plus
 
 ## Status
 
-**Current host (2026-11-24):** compute mode is enabled. `/etc/modprobe.d` no
+**Current host (2026-11-24, after the 05:45 UTC reboot):** compute mode is
+enabled and has survived a real reboot. `/etc/modprobe.d` no
 longer blacklists `mtgpu`, the regenerated initramfs carries no blacklist, and
 udev matches the S30's PCI modalias to `kmod load mtgpu`. The module is live
 with the documented headless parameters (`display=none disable_fbdev=1
@@ -107,9 +133,8 @@ condition. The previous boot-time block is preserved in
 `/var/backups/musa-fedora-compute-mode/20261124T020848Z/` and can be restored
 with `scripts/compute-mode.sh disable`.
 
-On this boot `scripts/verify-musa.sh` reports **13 passed, 1 failed, 1 skipped**;
-the failure is the vendor `mthreads-gmi` telemetry tool, not the compute path
-(see [its root cause](docs/root-cause-mthreads-gmi-drm-query-2026-11-24.md)).
+On the 05:45 UTC clean boot `scripts/verify-musa.sh` reports **14 passed,
+0 failed, 1 skipped** (OpenCL skip);
 The table below records the 2026-11-17, 2026-11-23 and 2026-11-24 hardware runs.
 
 | Layer | State | Evidence |
@@ -117,7 +142,7 @@ The table below records the 2026-11-17, 2026-11-23 and 2026-11-24 hardware runs.
 | PCI enumeration | **verified** | `lspci -nn` → `1ed5:0102` |
 | `mtgpu` driver / device nodes | **verified** | module live; S30 render node `/dev/dri/renderD130`; `/dev/mtgpu.0` |
 | IOMMU | **verified** | `intel_iommu=on iommu=pt`; S30 assigned to IOMMU group 11 |
-| Device telemetry | **verified via MUSA** | `musaInfo` reports MTT S30, 8 SMs, 3.97 GB; the separate `mthreads-gmi` 2.0.0 tool currently fails on a DRM ioctl skew (documented) |
+| Device telemetry | **verified** | `musaInfo` and `mthreads-gmi` both report MTT S30, 8 SMs, 3.97 GB on the clean 05:45 boot; `mthreads-gmi` fails only in live-module-replacement boots (documented) |
 | MUSA runtime discovery | **verified** | MUSA runtime 1.5.4 `musaInfo` reports one MTT S30 |
 | GPU memcpy test | **verified** | vendor `muMemcpyTest` exited successfully |
 | MUSA runtime host API | **verified** | `tests/musart-smoke.c` (alloc/copy/memset/streams/events) passed on the S30 |

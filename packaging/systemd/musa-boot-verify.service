@@ -2,9 +2,19 @@
 Description=MUSA for Fedora — MTT S30 compute-mode boot verification (one-shot)
 Documentation=file:///home/axogm/Documents/project/musa-fedora/docs/compute-mode.md
 # Run once the display manager is up so the "GNOME survives the live driver"
-# half of the check is meaningful. The script polls for the module itself, so
-# ordering only matters for the GDM/GNOME assertions.
-After=display-manager.service graphical.target
+# half of the check is meaningful. The script polls for the module and for gdm
+# itself (WAIT_SECS), so ordering only needs display-manager.service.
+#
+# Ordering-cycle note (2026-11-24): the previous unit ordered itself
+# After=graphical.target while being WantedBy=multi-user.target. Because
+# graphical.target requires multi-user.target, systemd found the cycle
+# multi-user.target -> musa-boot-verify -> graphical.target -> multi-user.target
+# and deleted the job: the service never ran and no boot evidence was written
+# (journal, 2026-11-24 05:45 boot). After=display-manager.service +
+# Wants=display-manager.service has no cycle: the service pulls GDM into the
+# multi-user transaction and orders itself after it; graphical.target does not
+# order itself before the service.
+After=display-manager.service
 Wants=display-manager.service
 # Only relevant while compute mode is active (no boot-time block present).
 ConditionPathExists=!/etc/modprobe.d/blacklist-mtgpu.conf

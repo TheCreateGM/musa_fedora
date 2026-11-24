@@ -29,7 +29,7 @@ old base package shipping vendor Mesa DRI drivers), see
   `musaInfo`, `muMemcpyTest`, the runtime API, `mp_10` vector-add, the compute
   suite, FP64 and headless Vulkan all pass.
 - **Compute mode enabled** (02:08 UTC): blacklist moved to
-  `/var/backups/musa-fedora-compute-mode/20261124T020816Z/`, initramfs
+  `/var/backups/musa-fedora-compute-mode/20261124T020848Z/`, initramfs
   regenerated; udev resolves the S30 to `kmod load mtgpu` and GNOME survived
   the live driver with no vendor DRI files installed. Post-reboot checks are
   listed in the [compute-mode record](docs/compute-mode-enabled-2026-11-24.md).
@@ -104,7 +104,7 @@ mtgpu_drm_major=2`), `/dev/mtgpu.0` and an `mtgpu` DRM render node exist, and
 GNOME runs on Intel `i915`. The vendor Mesa DRI drivers are not installed
 (`musa-runtime-display` is optional), which removes the 2026-11-23 GDM crash
 condition. The previous boot-time block is preserved in
-`/var/backups/musa-fedora-compute-mode/20261124T020816Z/` and can be restored
+`/var/backups/musa-fedora-compute-mode/20261124T020848Z/` and can be restored
 with `scripts/compute-mode.sh disable`.
 
 On this boot `scripts/verify-musa.sh` reports **13 passed, 1 failed, 1 skipped**;

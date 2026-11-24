@@ -99,7 +99,7 @@ After the hardware run and the package/COPR checks, `scripts/compute-mode.sh
 enable` was executed. Preflight passed (no `musa-runtime-display`, module
 present for the running kernel, S30 on the bus, dracut available), the whole
 `/etc/modprobe.d` set and the previous initramfs were backed up to
-`/var/backups/musa-fedora-compute-mode/20261124T020816Z/`, the blacklist was
+`/var/backups/musa-fedora-compute-mode/20261124T020848Z/`, the blacklist was
 moved into the backup, and the initramfs was regenerated. The module was
 already live, so it was not reloaded.
 

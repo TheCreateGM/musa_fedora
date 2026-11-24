@@ -100,7 +100,7 @@ affinity messages. GDM stayed active and GNOME Shell did not crash.
 run the boot-time blacklist was unchanged. **Subsequent change (02:08 UTC):**
 `scripts/compute-mode.sh enable` was executed and the host is now
 compute-active on a normal boot; the blacklist was moved to
-`/var/backups/musa-fedora-compute-mode/20261124T020816Z/` and the initramfs was
+`/var/backups/musa-fedora-compute-mode/20261124T020848Z/` and the initramfs was
 regenerated. See
 [`compute-mode-enabled-2026-11-24.md`](compute-mode-enabled-2026-11-24.md).
 

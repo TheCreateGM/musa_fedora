@@ -28,7 +28,7 @@ EXPECTED=(
     "musa-runtime-display:1.5.4-5"
     "musa-sdk:5.2.0-6"
     "musa-toolkit:3.1.0-3"
-    "mtgpu-dkms:3.1.0-12"
+    "mtgpu-dkms:3.1.0-13"
     "mtgpu-firmware:3.1.0-4"
 )
 

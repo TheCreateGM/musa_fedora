@@ -32,7 +32,7 @@ which is not installed here, so the crash condition is gone.
 
 | Item | Result |
 |---|---|
-| Backup | `/var/backups/musa-fedora-compute-mode/20261124T020816Z/` (old `blacklist-mtgpu.conf` + `.moved`, `90-mtgpu-headless.conf`, every `/etc/modprobe.d/*.conf`, previous initramfs) |
+| Backup | `/var/backups/musa-fedora-compute-mode/20261124T020848Z/` (old `blacklist-mtgpu.conf` + `.moved`, `90-mtgpu-headless.conf`, every `/etc/modprobe.d/*.conf`, previous initramfs) |
 | `/etc/modprobe.d/blacklist-mtgpu.conf` | moved into the backup directory (not deleted) |
 | `/etc/modprobe.d/90-mtgpu-headless.conf` | kept: `options mtgpu display=none disable_fbdev=1 mtgpu_drm_major=2` |
 | initramfs | regenerated with dracut for `7.3.4-300.fc45.x86_64` (no `mtgpu` blacklist inside) |
@@ -128,7 +128,7 @@ and leaves the module loaded until the reboot.
 
 | Item | Path |
 |---|---|
-| Full pre-change backup | `/var/backups/musa-fedora-compute-mode/20261124T020816Z/` |
+| Full pre-change backup | `/var/backups/musa-fedora-compute-mode/20261124T020848Z/` |
 | Old blacklist (original path copy) | `.../blacklist-mtgpu.conf` |
 | Old blacklist (moved file) | `.../blacklist-mtgpu.conf.moved` |
 | Previous initramfs | `.../initramfs-7.3.4-300.fc45.x86_64.img` |

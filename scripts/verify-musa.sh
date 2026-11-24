@@ -63,6 +63,33 @@ else
     info "current cmdline: $(cat /proc/cmdline)"
 fi
 
+hdr "DRM userspace library (libdrm_mtgpu)"
+# A second library that advertises the same SONAME in an ldconfig directory
+# makes ldconfig repoint the .so.1 link at it (observed with the 5.2.0 perf
+# shim libmtperf_target.so). Every consumer of libdrm_mtgpu then loads the
+# wrong library, silently. Keep the packaged link and name the culprit.
+DRM_LINK=/usr/lib64/libdrm_mtgpu.so.1
+DRM_LIB=/usr/lib64/libdrm_mtgpu.so.1.0.0
+if [[ -f "$DRM_LIB" ]]; then
+    drm_target=$(readlink "$DRM_LINK" 2>/dev/null || true)
+    if [[ "$drm_target" == "libdrm_mtgpu.so.1.0.0" ]]; then
+        ok "libdrm_mtgpu.so.1 resolves to the packaged 3.1.0 library"
+    else
+        bad "libdrm_mtgpu.so.1 -> ${drm_target:-missing} (expected libdrm_mtgpu.so.1.0.0)"
+        info "another library in an ldconfig path advertises SONAME libdrm_mtgpu.so.1:"
+        for cand in /usr/lib64/*.so* /lib64/*.so*; do
+            [[ -f "$cand" ]] || continue
+            [[ "$(readlink -f "$cand")" == "$(readlink -f "$DRM_LIB")" ]] && continue
+            if objdump -p "$cand" 2>/dev/null | grep -q 'SONAME.*libdrm_mtgpu\.so\.1'; then
+                info "  $cand"
+            fi
+        done
+        info "fix: quarantine that file, run 'ldconfig', then reinstall musa-runtime"
+    fi
+else
+    skip "packaged libdrm_mtgpu.so.1.0.0 not installed"
+fi
+
 hdr "Vendor management tool (mthreads-gmi)"
 GMI_BIN=""
 for candidate in /usr/bin/mthreads-gmi /usr/local/musa/bin/mthreads-gmi; do
@@ -78,6 +105,8 @@ if [[ -n "$GMI_BIN" ]]; then
         fi
     else
         bad "mthreads-gmi failed"
+        info "$(grep -m1 -i 'error' <<<"$out" || echo 'no error line')"
+        info "root cause and evidence: docs/root-cause-mthreads-gmi-drm-query-2026-11-24.md"
     fi
 else
     bad "mthreads-gmi not installed"

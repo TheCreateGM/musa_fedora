@@ -24,8 +24,8 @@ declare -A CHROOTS=(
 )
 # Package -> expected version-release of the artifact that must be present.
 EXPECTED=(
-    "musa-runtime:1.5.4-4"
-    "musa-runtime-display:1.5.4-4"
+    "musa-runtime:1.5.4-5"
+    "musa-runtime-display:1.5.4-5"
     "musa-sdk:5.2.0-6"
     "musa-toolkit:3.1.0-3"
     "mtgpu-dkms:3.1.0-12"
@@ -110,7 +110,9 @@ PY
     # --- 2. artifacts per chroot from the published repo -----------------
     for chroot in ${CHROOTS[$proj]}; do
         base="$COPR_DL/$OWNER/$proj/$chroot/"
-        qf='%{name}-%{version}-%{release}.%{arch}'
+        # qf ends in \n so dnf5 emits one record per line even when multiple
+        # globs land in one repoquery invocation.
+        qf='%{name}-%{version}-%{release}.%{arch}\n'
         # dnf5 prints repoquery records space separated on a single line, so
         # split on whitespace before filtering the source RPMs out.
         out="$(dnf --repofrompath=coprchk,$base --setopt=cachedir="$CACHE_ROOT/$chroot" \
@@ -136,6 +138,32 @@ PY
             info "present: $out"
         else
             ok "$chroot: all ${#EXPECTED[@]} expected artifact sets present"
+        fi
+
+        # Stale builds must not out-rank the expected set: a published
+        # version NEWER than the expected one would be picked up by a plain
+        # `dnf upgrade` on user hosts (this is how the incompatible
+        # mtgpu-dkms/musa-toolkit 5.2.0-1 builds leaked into the upgrade
+        # path).  Compare the highest published EVR per package with the
+        # expected one.  (Computed from the full artifact list above;
+        # dnf5's --latest-limit is unreliable across arches, e.g. it kept
+        # an old mtgpu-firmware 3.1.0-3.noarch as "latest" next to 3.1.0-4.)
+        newer=""
+        for exp in "${EXPECTED[@]}"; do
+            name="${exp%%:*}"; vr="${exp##*:}"
+            evrs="$(printf '%s\n' "$out" | grep -E "^${name}-[0-9]" | grep -v '\.src$' \
+                    | sed -E "s/^${name}-//; s/\.(fc[0-9]+|eln[0-9]+)\.(noarch|x86_64|aarch64)$//" \
+                    | sort -uV | tail -1)"
+            if [[ -z "$evrs" ]]; then
+                newer="$newer $name:<no binary records>"
+            elif [[ "$evrs" != "$vr" ]]; then
+                newer="$newer $name:newest=$evrs expected=$vr"
+            fi
+        done
+        if [[ -n "$newer" ]]; then
+            bad "$chroot: published newest version differs from the expected set (stale build? delete the build):$newer"
+        else
+            ok "$chroot: newest published version equals the expected set for all ${#EXPECTED[@]} packages"
         fi
     done
 done

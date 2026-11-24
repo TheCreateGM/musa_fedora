@@ -38,7 +38,7 @@ changed. The prior 2026-11-17 table follows as a dated historical state.
 | Active display | Intel UHD Graphics 770 (`i915`); S30 does not drive display output; its headless Vulkan device/buffer/memory path was exercised |
 | Firmware | Installed under `/lib/firmware/mthreads/` |
 | Runtime | MUSA runtime 1.5.4 at `/usr/local/musa/` (`libmusart.so.1.5.4`); SDK 5.2.0 compiler/headers at `/usr/local/musa-5.2/` |
-| Telemetry | `mthreads-gmi` reports driver 3.1.0, MTT S30, 4096 MiB; MUSA 1.5.4 `musaInfo` detects one device |
+| Telemetry | `mthreads-gmi` reported driver 3.1.0, MTT S30, 4096 MiB (2026-11-17 snapshot); **as of 2026-11-24 the tool fails with `EINVAL` on DRM ioctl `0x64/0x8a`** ([root cause](root-cause-mthreads-gmi-drm-query-2026-11-24.md)). MUSA 1.5.4 `musaInfo` still detects one device |
 | Hardware tests | `muMemcpyTest`, host runtime API, vector-add, eight `mp_10` compute checks, and headless Vulkan device/buffer/memory probe passed before the later OpenCL Oops; Moore Threads OpenCL ICD absent |
 | Verifier | Recorded pre-Oops `scripts/verify-musa.sh`: **13 passed, 0 failed, 1 skipped**; no further GPU tests were run in that boot |
 | Security and boot | Secure Boot disabled; SELinux enforcing |

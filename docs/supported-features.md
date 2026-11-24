@@ -10,7 +10,7 @@ statement that the GPU is currently available. The current host baseline is the
 | S30 PCI identity | Verified, `1ed5:0102` | Live sysfs inventory |
 | S30 PCI driver binding | Historically verified 2026-11-17; currently unbound and blacklisted | Current read-only inventory: no PCI driver symlink or `/dev/mtgpu.0` |
 | IOMMU | Verified | `intel_iommu=on iommu=pt`; S30 in IOMMU group 11 |
-| Device telemetry | Verified | `mthreads-gmi` reports driver 3.1.0, MTT S30, 4096 MiB |
+| Device telemetry | **Not working as of 2026-11-24** (previously verified 2026-11-17) | `mthreads-gmi` 2.0.0 now exits with `Error: failed to initialize mtml.` (`EINVAL` on DRM ioctl `0x64/0x8a`); see [root cause](root-cause-mthreads-gmi-drm-query-2026-11-24.md). The old report was driver 3.1.0, MTT S30, 4096 MiB |
 | MUSA 1.5.4 runtime discovery | Verified | `musaInfo` detects one device |
 | Vendor copy test | Verified | `muMemcpyTest` passes |
 | Host runtime API | Verified | `tests/musart-smoke.c` passes on the S30 |

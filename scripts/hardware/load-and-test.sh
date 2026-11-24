@@ -24,11 +24,19 @@ LOGFILE="$LOG_DIR/load-and-test.log"
 FAULT_RE='BUG: kernel NULL pointer dereference|Oops:|general protection fault|kernel BUG at|invalid opcode'
 
 mkdir -p "$LOG_DIR"
-log() { printf '%s %s\n' "$(date -u +%H:%M:%SZ)" "$*" | tee -a "$LOGFILE"; }
-hdr() { log ""; log "===== $* ====="; }
-
-# Keep the whole run in one file, including test output.
+# Keep console progress on fd 3 and the complete run (including test output)
+# in the log file. Write each log line exactly once: a previous version both
+# redirected stdout into the file and piped log() through tee, which duplicated
+# every line in the evidence log.
+exec 3>&1
 exec >>"$LOGFILE" 2>&1
+log() {
+    local m
+    m="$(date -u +%H:%M:%SZ) $*"
+    printf '%s\n' "$m" >>"$LOGFILE"
+    printf '%s\n' "$m" >&3
+}
+hdr() { log ""; log "===== $* ====="; }
 
 hdr "start $(date -u +%FT%TZ) kernel=$(uname -r)"
 log "log file: $LOGFILE"
@@ -80,7 +88,11 @@ stage_test_binaries() {
             cp -a "$src/$b" "$LOG_DIR/$b"
         fi
     done
-    log "test binaries staged: $(ls "${needed[@]}" 2>/dev/null | wc -l)/${#needed[@]}"
+    local staged=0 b
+    for b in "${needed[@]}"; do
+        [[ -x "$LOG_DIR/$b" ]] && staged=$((staged + 1))
+    done
+    log "test binaries staged: $staged/${#needed[@]}"
 }
 log "module: $MODULE"
 log "sha256: $(sha256sum "$MODULE")"

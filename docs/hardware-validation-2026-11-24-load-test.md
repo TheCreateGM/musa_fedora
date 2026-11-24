@@ -96,14 +96,22 @@ affinity messages. GDM stayed active and GNOME Shell did not crash.
 
 ## State after the test
 
-`mtgpu` is still loaded (the scripts never unload it) and the boot-time
-blacklist is unchanged, so a reboot returns the host to the known-good
-display-only state with the module unbound. No boot configuration,
-initramfs, modprobe option, or PCI binding was modified by this run.
+`mtgpu` is still loaded (the scripts never unload it). Immediately after this
+run the boot-time blacklist was unchanged. **Subsequent change (02:08 UTC):**
+`scripts/compute-mode.sh enable` was executed and the host is now
+compute-active on a normal boot; the blacklist was moved to
+`/var/backups/musa-fedora-compute-mode/20261124T020816Z/` and the initramfs was
+regenerated. See
+[`compute-mode-enabled-2026-11-24.md`](compute-mode-enabled-2026-11-24.md).
+
+A second `verify-musa.sh` run at 02:05 UTC, after the `libdrm_mtgpu.so.1` link
+was restored, reported **13 passed / 1 failed / 1 skipped**; the DRM-library
+check passes now, and the only failure is still `mthreads-gmi`.
 
 ## Not covered
 
 Display output from the S30 connectors (`display=mt`), DisplayPort hotplug,
 video encode/decode, multi-GPU, OpenCL, and framework integrations
-(`torch_musa`, etc.) remain untested. Permanent enablement stays behind the
-explicit-approval `scripts/compute-mode.sh enable` workflow.
+(`torch_musa`, etc.) remain untested. The 02:08 compute-mode enable is recorded
+separately; the one post-reboot observation still outstanding is udev loading
+`mtgpu` before GDM with no vendor DRI files installed.

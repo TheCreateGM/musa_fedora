@@ -1,14 +1,41 @@
 # MUSA on Fedora — MTT S30
 
 MUSA driver/runtime packaging and test sources for the **Moore Threads MTT S30**
-(`1ed5:0102`) on Fedora. The host is Fedora 45 / kernel `7.3.4-300.fc45.x86_64`. The 2026-11-23
-controlled test loaded `mtgpu` for validation; that module remains live in this
-boot, while a normal reboot returns to the intentionally blacklisted, unbound
-state. See the [current S30 suite record](docs/hardware-validation-2026-11-23-suite-verify.md),
+(`1ed5:0102`) on Fedora. The host is Fedora 45 / kernel `7.3.4-300.fc45.x86_64`.
+Since **2026-11-24** the host runs with **compute mode enabled**: the boot-time
+`blacklist mtgpu` has been removed (with a full backup and a `disable` path), so
+udev binds the S30 on a normal boot. The change is recorded in
+[compute-mode-enabled-2026-11-24](docs/compute-mode-enabled-2026-11-24.md); the
+boot-time block remains available for hosts that want the S30 unbound by
+default (`scripts/compute-mode.sh disable`). See the
+[2026-11-24 hardware run](docs/hardware-validation-2026-11-24-load-test.md),
+[current S30 suite record](docs/hardware-validation-2026-11-23-suite-verify.md),
 [full host status](docs/current-state-2026-11-20.md), and the
 [Live USB validation/build report](docs/session-2026-11-23-live-usb-validation.md).
-For the repair of the installed system's disk boot (GDM crash caused by an
-auto-loaded `mtgpu`), see [the 2026-11-23 boot fix](docs/boot-fix-2026-11-23.md).
+For the repair of the installed system's disk boot (GDM crash caused by the
+old base package shipping vendor Mesa DRI drivers), see
+[the 2026-11-23 boot fix](docs/boot-fix-2026-11-23.md).
+
+### Updates — 2026-11-24 (session)
+
+- **`musa-runtime` 1.5.4-5 installed and validated.** It ships
+  `/etc/profile.d/zz-musa-fedora.sh`, which puts the 1.5.4 runtime before the
+  5.2.0 compiler prefix in login shells; the unowned legacy
+  `/etc/profile.d/musa.sh` had resolved `musaInfo` to the incompatible 5.2
+  binary. `scripts/check-musa-env.sh` now reports `MUSA_ENV_STATUS: PASS`.
+- **Clean-boot hardware re-validation:** `verify-musa.sh` reported
+  **13 passed, 1 failed, 1 skipped** on the live S30. The single failure is the
+  vendor `mthreads-gmi` telemetry tool (DRM ioctl skew, root cause recorded);
+  `musaInfo`, `muMemcpyTest`, the runtime API, `mp_10` vector-add, the compute
+  suite, FP64 and headless Vulkan all pass.
+- **Compute mode enabled** (02:08 UTC): blacklist moved to
+  `/var/backups/musa-fedora-compute-mode/20261124T020816Z/`, initramfs
+  regenerated; udev resolves the S30 to `kmod load mtgpu` and GNOME survived
+  the live driver with no vendor DRI files installed. Post-reboot checks are
+  listed in the [compute-mode record](docs/compute-mode-enabled-2026-11-24.md).
+- **COPR:** 9/9 chroots, 20/20 checks pass; both projects publish
+  `musa-runtime` 1.5.4-5, `musa-sdk` 5.2.0-6, `musa-toolkit` 3.1.0-3,
+  `mtgpu-dkms` 3.1.0-12 and `mtgpu-firmware` 3.1.0-4.
 
 A controlled load test on the installed system on 2026-11-23 ran the full MUSA
 workload successfully on the S30; see the
@@ -69,30 +96,28 @@ The project targets the vendor's own S30 stack — **mtgpu driver 3.1.0** plus
 
 ## Status
 
-**Current host:** on a normal boot the S30 is present but unbound.
-`/etc/modprobe.d/blacklist-mtgpu.conf` intentionally blocks the driver because
-prior driver loads caused GNOME/KMS crashes; prior vendor-core faults also make
-ad-hoc load/rebind unsafe. In the 2026-11-23 controlled test boot the module
-was loaded once with headless parameters and remains loaded (the scripts never
-unload it); a reboot restores the blacklisted, unbound state. The read-only
-hardware check and gated GPU test report NOT RUN/BLOCKED on a normal boot. In the
-2026-11-20 recheck, the isolated 7.3.4 driver build and MUSA 5.2.0 `mp_10`
-compile/header checks passed, but no driver was installed or loaded and no GPU
-workload ran. In a separate controlled load on 2026-11-23, the driver was
-loaded once with headless parameters on the installed kernel and all functional
-GPU steps passed (memcpy, runtime API, `mp_10` kernels, compute, fp64, Vulkan);
-two informational tools failed and GNOME Shell crashed. That result is
-documented in the
-[2026-11-23 load-test evidence](docs/hardware-validation-2026-11-23-load-test.md).
-It is not the state of a normal boot, where the S30 stays unbound. The table
-below records both the 2026-11-17 and 2026-11-23 hardware runs.
+**Current host (2026-11-24):** compute mode is enabled. `/etc/modprobe.d` no
+longer blacklists `mtgpu`, the regenerated initramfs carries no blacklist, and
+udev matches the S30's PCI modalias to `kmod load mtgpu`. The module is live
+with the documented headless parameters (`display=none disable_fbdev=1
+mtgpu_drm_major=2`), `/dev/mtgpu.0` and an `mtgpu` DRM render node exist, and
+GNOME runs on Intel `i915`. The vendor Mesa DRI drivers are not installed
+(`musa-runtime-display` is optional), which removes the 2026-11-23 GDM crash
+condition. The previous boot-time block is preserved in
+`/var/backups/musa-fedora-compute-mode/20261124T020816Z/` and can be restored
+with `scripts/compute-mode.sh disable`.
+
+On this boot `scripts/verify-musa.sh` reports **13 passed, 1 failed, 1 skipped**;
+the failure is the vendor `mthreads-gmi` telemetry tool, not the compute path
+(see [its root cause](docs/root-cause-mthreads-gmi-drm-query-2026-11-24.md)).
+The table below records the 2026-11-17, 2026-11-23 and 2026-11-24 hardware runs.
 
 | Layer | State | Evidence |
 |---|---|---|
 | PCI enumeration | **verified** | `lspci -nn` → `1ed5:0102` |
-| `mtgpu` driver / device nodes | **verified** | module live; S30 render node `/dev/dri/renderD129`; `/dev/mtgpu.0` |
+| `mtgpu` driver / device nodes | **verified** | module live; S30 render node `/dev/dri/renderD130`; `/dev/mtgpu.0` |
 | IOMMU | **verified** | `intel_iommu=on iommu=pt`; S30 assigned to IOMMU group 11 |
-| Device telemetry | **verified** | `mthreads-gmi` reports Driver Version 3.1.0, MTT S30, 4096 MiB |
+| Device telemetry | **verified via MUSA** | `musaInfo` reports MTT S30, 8 SMs, 3.97 GB; the separate `mthreads-gmi` 2.0.0 tool currently fails on a DRM ioctl skew (documented) |
 | MUSA runtime discovery | **verified** | MUSA runtime 1.5.4 `musaInfo` reports one MTT S30 |
 | GPU memcpy test | **verified** | vendor `muMemcpyTest` exited successfully |
 | MUSA runtime host API | **verified** | `tests/musart-smoke.c` (alloc/copy/memset/streams/events) passed on the S30 |
@@ -172,13 +197,16 @@ recheck. Do not use the 5.2.0 runtime for S30 execution.
   compatible with this 3.1.0 driver ABI; do not substitute it for runtime 1.5.4.
 * The host-installed set at the 2026-11-23 controlled load was
   `mtgpu-dkms` 3.1.0-11, `mtgpu-firmware` 3.1.0-4, `musa-runtime` 1.5.4-4,
-  `musa-sdk` 5.2.0-6, and `musa-toolkit` 3.1.0-3. COPR now publishes
+  `musa-sdk` 5.2.0-6, and `musa-toolkit` 3.1.0-3. COPR publishes
   `mtgpu-dkms` 3.1.0-12 (tmpfiles event-report directories; see the
-  [COPR verification](docs/copr-verification-2026-11-23.md)), but it is not
-  installed in this boot: the module is loaded and the package helper refuses
-  transactions that would replace a live module. The boot-time blacklist is
-  still in place for normal boots; the controlled test deliberately loaded the
-  driver once. Newer package builds are not evidence of runtime compatibility.
+  [COPR verification](docs/copr-verification-2026-11-23.md)) and
+  `musa-runtime` 1.5.4-5. Both were installed on 2026-11-24 during a boot in
+  which `mtgpu` was not loaded (a live-module replacement is refused by the
+  package helper); the host now runs `musa-runtime` 1.5.4-5,
+  `mtgpu-dkms` 3.1.0-12 and compute mode, with the boot-time blacklist no
+  longer active (see
+  [compute-mode-enabled-2026-11-24](docs/compute-mode-enabled-2026-11-24.md)).
+  Newer package builds are not evidence of runtime compatibility.
 * A Fedora 45 container test and packaged compiler/runtime test on the physical
   S30 passed on 2026-11-17, with scriptlets suppressed. This is historical
   evidence from a prior loaded-driver state, not a test of the current boot.
@@ -202,16 +230,14 @@ recheck. Do not use the 5.2.0 runtime for S30 execution.
 
 * The recorded tests are read-only apart from temporary files and do not install
   packages, change boot settings, or load/unload/rebind kernel modules.
-* In the 2026-11-23 controlled test boot, the S30 is bound to the already-live
-  `mtgpu` module; that boot also contains two historical `Invalid cmd_type`
-  reports from the incompatible 5.2.0 runtime ABI. The smoke test refuses to
-  run again in this boot. A normal reboot restores the blacklist and unbound
-  state. See [the live inventory](docs/current-state-2026-11-20.md) and
-  [suite record](docs/hardware-validation-2026-11-23-suite-verify.md). Do not remove the
-  blacklist or load/unbind/rebind the driver without a reviewed recovery plan;
-  the draft plan is
-  [docs/maintenance-plan-mtgpu-load-2026-11-20.md](docs/maintenance-plan-mtgpu-load-2026-11-20.md)
-  and is not approved for execution yet.
+* Since 2026-11-24 the host runs compute mode: the S30 is bound on a normal
+  boot and remains bound after reboot. The previous boot-time block and the
+  whole `/etc/modprobe.d` set are backed up under
+  `/var/backups/musa-fedora-compute-mode/`; `scripts/compute-mode.sh disable`
+  restores the unbound state. Do not unload the module or unbind/rebind the
+  PCI device as part of routine tests (historical rebind fault:
+  `docs/root-cause-rebind-2026-11-16.md`). The controlled-load runbook remains
+  the safe path for a host that still blacklists the driver.
 * The older boot that logged an `mtgpu` kernel fault during the archived OpenCL
   experiment also must not be used for GPU workloads. The reviewed procedure to
   resume hardware validation after a clean reboot is in

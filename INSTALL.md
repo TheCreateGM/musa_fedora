@@ -2,21 +2,25 @@
 
 The MTT S30 is present on this host, and the vendor **driver 3.1.0** plus
 matching **MUSA runtime 1.5.4** are installed. The full stack has been verified
-end-to-end on this physical card on 2026-11-23 — see the
+end-to-end on this physical card — see the
+[2026-11-24 hardware run](docs/hardware-validation-2026-11-24-load-test.md), the
 [suite verification](docs/hardware-validation-2026-11-23-suite-verify.md) and the
-[container verification of the shipped packages](docs/container-verification-2026-11-23.md)
-(13 passed, 0 failed each).
+[container verification of the shipped packages](docs/container-verification-2026-11-23.md).
 
-On a **normal boot** the card is still unbound, because
-`/etc/modprobe.d/blacklist-mtgpu.conf` blocks `mtgpu` to protect the
-Intel-driven GNOME desktop. That block is a deliberate, reversible safety
-setting, so a fresh install is compute-capable but not yet compute-active. Two
-supported ways to get a working compute node:
+On a **normal boot** the card is bound: the RPMs ship no blacklist, and since
+2026-11-24 the installed host also runs with compute mode enabled (the old
+local `/etc/modprobe.d/blacklist-mtgpu.conf` was moved to a backup by
+`scripts/compute-mode.sh enable`; see
+[the compute-mode record](docs/compute-mode-enabled-2026-11-24.md)). A fresh
+install therefore has a working compute node after the driver package builds
+for the running kernel. If a host intentionally wants the S30 unbound (for
+example, to compare against another display driver), use:
 
+* persistently: `scripts/compute-mode.sh disable` (restores the boot-time
+  block; takes effect on the next reboot) and `enable` to undo it;
 * one-shot, no boot change: [`scripts/hardware/load-and-test.sh`](scripts/hardware/load-and-test.sh)
-  under the [controlled-load runbook](docs/runbook-controlled-load-2026-11-23.md);
-* permanently, boot-config change: [`scripts/compute-mode.sh enable`](docs/compute-mode.md)
-  (preflight guards, backups, and `disable` to restore).
+  under the [controlled-load runbook](docs/runbook-controlled-load-2026-11-23.md)
+  for a host whose blacklist is still active.
 
 This guide covers package workflows, IOMMU setup and driver activation; §6 lists
 the recovery paths.

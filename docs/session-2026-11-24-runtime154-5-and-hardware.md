@@ -52,9 +52,12 @@ Latest published set: `musa-runtime` 1.5.4-5, `musa-runtime-display` 1.5.4-5,
 A single controlled `insmod` (documented headless arguments) followed by the
 gated suite on the live MTT S30. Full record:
 [`hardware-validation-2026-11-24-load-test.md`](hardware-validation-2026-11-24-load-test.md).
-Result: `verify-musa.sh` **12 passed / 1 failed / 1 skipped**; the failure is
-the vendor telemetry tool, not the compute path. No kernel fault, GNOME/GDM
-survived. Evidence under `~/.musa-work/load-test-20261124T014358Z/`.
+Result: `verify-musa.sh` **12 passed / 1 failed / 1 skipped** at 01:43 UTC;
+the failure is the vendor telemetry tool, not the compute path. A second run at
+02:05 UTC, after the `libdrm_mtgpu.so.1` link was restored, reported
+**13 passed / 1 failed / 1 skipped** (the DRM-library check now passes); the
+remaining failure is still `mthreads-gmi`. No kernel fault, GNOME/GDM survived.
+Evidence under `~/.musa-work/load-test-20261124T014358Z/`.
 
 ## 4. Two findings from the hardware run
 
@@ -83,8 +86,40 @@ survived. Evidence under `~/.musa-work/load-test-20261124T014358Z/`.
 * `scripts/check-musa-env.sh`: new login-environment validator
   (`--quarantine-orphans --plan` for the legacy `musa.sh`).
 
-## 6. State at end of session
+## 6. State at end of the controlled load
 
-The module was left loaded for evidence collection and the boot-time
-blacklist is unchanged, so the planned reboot restores the safe
-display-only state. No boot configuration was modified.
+The module was left loaded for evidence collection and, at that point, the
+boot-time blacklist was unchanged, so a reboot would have restored the safe
+display-only state. Section 7 records the subsequent decision to enable
+compute mode permanently on this host.
+
+## 7. Compute mode enabled (02:08 UTC)
+
+After the hardware run and the package/COPR checks, `scripts/compute-mode.sh
+enable` was executed. Preflight passed (no `musa-runtime-display`, module
+present for the running kernel, S30 on the bus, dracut available), the whole
+`/etc/modprobe.d` set and the previous initramfs were backed up to
+`/var/backups/musa-fedora-compute-mode/20261124T020816Z/`, the blacklist was
+moved into the backup, and the initramfs was regenerated. The module was
+already live, so it was not reloaded.
+
+Verification (no reboot):
+
+* no `blacklist mtgpu` in `/etc/modprobe.d` or in the regenerated initramfs;
+* `modprobe -c` has no `blacklist mtgpu`;
+* `udevadm test --action=add /sys/bus/pci/devices/0000:01:00.0` resolves the
+device to `kmod load` with `DRIVER=mtgpu`;
+* the full MUSA suite still passes with GNOME alive (section 3);
+* the S30 DRM card is `card2` with a `Virtual-1` connector; `/dev/mtgpu.0`
+  and `/dev/dri/renderD130` are present.
+
+The one thing that still needs a reboot to observe is udev loading `mtgpu`
+before GDM with no vendor DRI files present. Both halves are independently
+verified (udev autoload happened on the 2026-11-23 boot; the live module with
+no DRI files coexists with GNOME in the controlled loads), and the exact
+post-reboot checks plus the `disable` rollback are in
+[`compute-mode-enabled-2026-11-24.md`](compute-mode-enabled-2026-11-24.md).
+
+At the end of this session the host is left **compute-active**: `mtgpu` live,
+blacklist removed from `/etc/modprobe.d` and the initramfs, full backup on
+disk.

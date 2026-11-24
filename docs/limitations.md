@@ -1,9 +1,12 @@
 # Feature boundary and limitations
 
 The latest live state is recorded in
+[compute-mode-enabled-2026-11-24.md](compute-mode-enabled-2026-11-24.md) and
 [current-state-2026-11-20.md](current-state-2026-11-20.md); the most recent
 session's build and safety results are in
 [session-2026-11-23-live-usb-validation.md](session-2026-11-23-live-usb-validation.md).
+Measured performance figures and tuning advice live in
+[performance-tuning.md](performance-tuning.md).
 
 ## Historical hardware validation (2026-11-17; not current host state)
 
@@ -30,10 +33,11 @@ was exercised.
 
 ## What is not verified or supported
 
-The tests listed above were successful before the OpenCL Oops described
-below, but the GPU stack is not currently live. The 2026-11-20 inventory found
-the S30 unbound and the `mtgpu` module intentionally blacklisted after prior
-GNOME/KMS crashes. Do not load, unbind, or rebind it as an ad-hoc test.
+The tests listed above were successful; since compute mode was enabled on
+2026-11-24 the stack is live again on a normal boot — udev autoloads `mtgpu`,
+and `scripts/verify-musa.sh` reports **14 passed, 0 failed, 1 skipped** against
+the physical S30. Do not nevertheless load, unbind, or rebind the driver as an
+ad-hoc test: a historical rebind caused a kernel fault.
 Moore Threads OpenCL is unavailable: no MT ICD is installed in the default
 loader, and the archived 2.1.1 ICD caused a kernel Oops on this driver. OpenGL,
 display rendering/presentation, hardware video encode/decode, `torch_musa`,
@@ -44,8 +48,9 @@ The vendor feature claims and project validation state are separated in
 [supported features](supported-features.md).
 
 The historically exercised combination is driver `mtgpu` 3.1.0 + MUSA runtime
-1.5.4 + MUSA 5.2.0 compiler targeting `mp_10`. It is not live on the current
-boot, and the separate 5.2.0 *runtime* is not compatible with the 3.1.0 driver
+1.5.4 + MUSA 5.2.0 compiler targeting `mp_10`. That combination is the one
+currently live on the host, and the separate 5.2.0 *runtime* is not compatible
+with the 3.1.0 driver
 ABI and must not be substituted for 1.5.4. Fedora 45 + Intel + S30 is not
 vendor-qualified: the public SDK catalog lists S5000 for MUSA 5.2.0 and does
 not list S30 or Fedora.
@@ -55,10 +60,11 @@ not list S30 or Fedora.
 The current Copr build of `mtgpu-dkms` 3.1.0-9 compiled on Fedora 44, 45, ELN,
 and Rawhide x86_64 and includes the S30 PCI alias. Every chroot emitted 5,486
 objtool warnings from the opaque vendor core, including missing-ENDBR
-relocations and RETPOLINE naked returns. The build is not load-approved. The
-host still has package release 7 installed and keeps `mtgpu` blacklisted; the
-release-8 package was not installed on the host. Do not disable IBT/CET or
-alter vendor-core metadata.
+relocations and RETPOLINE naked returns. Do not disable IBT/CET or alter
+vendor-core metadata. The host now runs `mtgpu-dkms` **3.1.0-12** with compute
+mode enabled (release 13 published to Copr, comment-only delta), the S30 is
+bound, and the stack has been validated on the hardware — but Copr build
+success on its own does not establish that.
 
 The project-authored `mtgpu_bind.ko` in the inactive `7.2.15-300.fc45.x86_64`
 tree only bound the PCI function and created a character device; its default
@@ -70,8 +76,8 @@ and global alias were hash-verified and quarantined under `musa-data`.
 | Capability | Status |
 |---|---|
 | S30 PCI identity `1ed5:0102` | Verified |
-| S30 PCI driver binding (`mtgpu` 3.1.0) | Historically verified 2026-11-17; currently unbound/blacklisted |
-| `/dev/mtgpu.0` and S30 render node `/dev/dri/renderD129` | Historically verified; no S30 render node currently present |
+| S30 PCI driver binding (`mtgpu` 3.1.0) | Verified; live since compute mode enabled 2026-11-24 |
+| `/dev/mtgpu.0` and S30 render node | Verified on the live boot; render/DRI nodes present under `/dev/dri` |
 | IOMMU groups | Verified; S30 in IOMMU group 11 |
 | MUSA runtime 1.5.4 device discovery (`musaInfo`) | Verified; one device |
 | Vendor `muMemcpyTest` | Verified |
@@ -91,11 +97,13 @@ and global alias were hash-verified and quarantined under `musa-data`.
 
 Earlier local/Copr RPM builds and isolated Fedora 45 package/runtime tests are
 recorded in [current-state-2026-11-17.md](current-state-2026-11-17.md). The
-latest live host inventory is [current-state-2026-11-20.md](current-state-2026-11-20.md):
-the S30 is unbound, the driver is blacklisted, and GPU tests are blocked. Copr
-build success does not establish successful driver loading or current hardware
-operation. Broader MUSA features, frameworks, and vendor Fedora/Intel
-qualification remain outstanding.
+latest live host inventory is [current-state-2026-11-20.md](current-state-2026-11-20.md);
+the driver has since been un-blacklisted and compute mode enabled, so the S30
+is bound on a normal boot and the GPU suites run. What remains outstanding is
+broader MUSA feature coverage (OpenGL, video, `torch_musa`, other frameworks),
+Moore Threads OpenCL, and vendor Fedora/Intel qualification — not basic device
+bring-up. S30-specific performance work and its measured evidence are in
+[performance-tuning.md](performance-tuning.md).
 
 ## Safety
 

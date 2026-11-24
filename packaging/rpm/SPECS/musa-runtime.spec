@@ -6,7 +6,7 @@
 
 Name:           musa-runtime
 Version:        1.5.4
-Release:        5%{?dist}
+Release:        6%{?dist}
 Summary:        MUSA runtime userspace for Moore Threads GPUs (MTT S30)
 
 License:        Proprietary
@@ -16,7 +16,6 @@ Source0:        musa-runtime-1.5.4.tar.gz
 # The payload is the userspace half of the vendor musa_3.1.0-pc_x86.deb
 # (runtime 1.5.4), which is the release validated with the mtgpu 3.1.0 kernel
 # driver on the MTT S30.
-BuildArch:      x86_64
 Requires:       glibc >= 2.34
 Requires:       libstdc++
 Requires:       libdrm >= 2.4.110
@@ -200,6 +199,12 @@ sysctl --system >/dev/null 2>&1 || true
 /usr/lib64/xorg/
 
 %changelog
+* Tue Nov 24 2026 MUSA Fedora Team <musa@fedoraproject.org> - 1.5.4-6
+- Drop the redundant 'BuildArch: x86_64' and rely on the ExclusiveArch tag
+- the spec already carried. BuildArch would emit an x86_64 RPM from any
+- chroot instead of skipping non-x86_64 targets, which rpmlint reports as
+- buildarch-instead-of-exclusivearch-tag. Shipped payload is unchanged.
+
 * Mon Nov 23 2026 MUSA Fedora Team <musa@fedoraproject.org> - 1.5.4-5
 - Ship /etc/profile.d/zz-musa-fedora.sh so a login shell selects the 1.5.4
   runtime (libmusart.so.1.5) ahead of the 5.2.0 compiler prefix. A legacy

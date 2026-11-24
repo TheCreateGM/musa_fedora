@@ -38,10 +38,10 @@ dnf_path() {
 expected_version() {
     case "$1" in
         mtgpu-dkms) echo "3.1.0-13.fc$FEDORA" ;;
-        mtgpu-firmware) echo "3.1.0-4.fc$FEDORA" ;;
-        musa-runtime) echo "1.5.4-5.fc$FEDORA" ;;
-        musa-sdk) echo "5.2.0-6.fc$FEDORA" ;;
-        musa-toolkit) echo "3.1.0-3.fc$FEDORA" ;;
+        mtgpu-firmware) echo "3.1.0-5.fc$FEDORA" ;;
+        musa-runtime) echo "1.5.4-6.fc$FEDORA" ;;
+        musa-sdk) echo "5.2.0-7.fc$FEDORA" ;;
+        musa-toolkit) echo "3.1.0-4.fc$FEDORA" ;;
         *) return 2 ;;
     esac
 }

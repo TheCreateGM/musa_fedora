@@ -2,14 +2,13 @@
 
 Name:           musa-toolkit
 Version:        3.1.0
-Release:        3%{?dist}
+Release:        4%{?dist}
 Summary:        Complete MUSA stack for Moore Threads GPUs (MTT S30)
 
 License:        Proprietary
 URL:            https://www.mthreads.com
 Source0:        musa-toolkit-3.1.0.tar.gz
 
-BuildArch:      x86_64
 ExclusiveArch:  x86_64
 
 # The validated stack: driver 3.1.0 with runtime 1.5.4 and the 5.2.0 compiler.
@@ -52,6 +51,12 @@ mkdir -p %{buildroot}%{_prefix}
 %doc README.md
 
 %changelog
+* Tue Nov 24 2026 MUSA Fedora Team <musa@fedoraproject.org> - 3.1.0-4
+- Drop the redundant 'BuildArch: x86_64' and rely on the ExclusiveArch tag
+- the spec already carried. BuildArch would emit an x86_64 RPM from any
+- chroot instead of skipping non-x86_64 targets, which rpmlint reports as
+- buildarch-instead-of-exclusivearch-tag. Shipped payload is unchanged.
+
 * Fri Nov 20 2026 MUSA Fedora Team <musa@fedoraproject.org> - 3.1.0-3
 - Keep the packaged status note evergreen by linking to the live project
   report instead of duplicating a package release number that changes often.

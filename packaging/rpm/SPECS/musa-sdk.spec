@@ -6,14 +6,13 @@
 
 Name:           musa-sdk
 Version:        5.2.0
-Release:        6%{?dist}
+Release:        7%{?dist}
 Summary:        MUSA compiler toolchain (mcc, mtxas) for Moore Threads GPUs
 
 License:        Proprietary
 URL:            https://www.mthreads.com
 Source0:        musa-sdk-5.2.0.tar.gz
 
-BuildArch:      x86_64
 ExclusiveArch:  x86_64
 Requires:       glibc >= 2.34
 Requires:       libstdc++ >= 11
@@ -74,6 +73,12 @@ printf '/usr/local/musa-5.2/lib\n' > %{buildroot}%{_sysconfdir}/ld.so.conf.d/mus
 %config(noreplace) %{_sysconfdir}/ld.so.conf.d/musa-sdk.conf
 
 %changelog
+* Tue Nov 24 2026 MUSA Fedora Team <musa@fedoraproject.org> - 5.2.0-7
+- Drop the redundant 'BuildArch: x86_64' and rely on the ExclusiveArch tag
+- the spec already carried. BuildArch would emit an x86_64 RPM from any
+- chroot instead of skipping non-x86_64 targets, which rpmlint reports as
+- buildarch-instead-of-exclusivearch-tag. Shipped payload is unchanged.
+
 * Tue Nov 17 2026 MUSA Fedora Team <musa@fedoraproject.org> - 5.2.0-6
 - Require gcc-c++ instead of libstdc++-devel. Linking a MUSA C++ program
   needs the unversioned libstdc++.so linker symlink, which Fedora ships only

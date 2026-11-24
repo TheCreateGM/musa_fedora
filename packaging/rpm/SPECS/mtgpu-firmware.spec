@@ -8,14 +8,13 @@
 
 Name:           mtgpu-firmware
 Version:        3.1.0
-Release:        4%{?dist}
+Release:        5%{?dist}
 Summary:        Firmware for the Moore Threads mtgpu kernel driver
 
 License:        Proprietary
 URL:            https://www.mthreads.com
 Source0:        mtgpu-firmware-3.1.0.tar.gz
 
-BuildArch:      x86_64
 ExclusiveArch:  x86_64
 Requires:       linux-firmware
 
@@ -46,6 +45,12 @@ cp -a lib/firmware/mthreads %{buildroot}%{_prefix}/lib/firmware/
 %{_prefix}/lib/firmware/mthreads/
 
 %changelog
+* Tue Nov 24 2026 MUSA Fedora Team <musa@fedoraproject.org> - 3.1.0-5
+- Drop the redundant 'BuildArch: x86_64' and rely on the ExclusiveArch tag
+- the spec already carried. BuildArch would emit an x86_64 RPM from any
+- chroot instead of skipping non-x86_64 targets, which rpmlint reports as
+- buildarch-instead-of-exclusivearch-tag. Shipped payload is unchanged.
+
 * Fri Nov 20 2026 MUSA Fedora Team <musa@fedoraproject.org> - 3.1.0-4
 - Mark the package x86_64-only, matching the current MUSA/Fedora stack and
   avoiding a misleading noarch warning for GPU ISA ELF firmware images.

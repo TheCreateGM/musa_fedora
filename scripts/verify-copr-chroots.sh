@@ -24,12 +24,12 @@ declare -A CHROOTS=(
 )
 # Package -> expected version-release of the artifact that must be present.
 EXPECTED=(
-    "musa-runtime:1.5.4-5"
-    "musa-runtime-display:1.5.4-5"
-    "musa-sdk:5.2.0-6"
-    "musa-toolkit:3.1.0-3"
+    "musa-runtime:1.5.4-6"
+    "musa-runtime-display:1.5.4-6"
+    "musa-sdk:5.2.0-7"
+    "musa-toolkit:3.1.0-4"
     "mtgpu-dkms:3.1.0-13"
-    "mtgpu-firmware:3.1.0-4"
+    "mtgpu-firmware:3.1.0-5"
 )
 
 INCLUDE_SRC=0

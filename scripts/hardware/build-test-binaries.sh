@@ -13,6 +13,7 @@
 #   musa-vector-add  mp_10 vector-add kernel          (mcc --offload-arch=mp_10)
 #   musa-compute     mp_10 compute suite               (mcc --offload-arch=mp_10)
 #   musa-fp64        mp_10 FP64 kernel                (mcc --offload-arch=mp_10)
+#   musa-perf        mp_10 performance benchmark       (mcc --offload-arch=mp_10)
 #   vk-enum          headless Vulkan device/buffer    (gcc)
 set -uo pipefail
 
@@ -97,6 +98,7 @@ build_host musart-smoke musart-smoke.c -lmusart
 build_mcc musa-vector-add musa-vector-add.mu
 build_mcc musa-compute musa-compute.mu
 build_mcc musa-fp64 musa-fp64.mu
+build_mcc musa-perf musa-perf.mu
 
 # Headless Vulkan device/buffer/map probe.
 echo "building vk-enum from tests/vulkan-enumerate.c"

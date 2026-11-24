@@ -90,6 +90,47 @@ The functional GPU checks are the same ones used in the controlled load test:
 `tests/musa-compute.mu`, `tests/musa-fp64.mu` and the Vulkan device/buffer/map
 probe, driven by `scripts/hardware/load-and-test.sh`.
 
+## Verifying that compute mode survives a reboot
+
+The `enable` path is verified live (blacklist gone from `/etc/modprobe.d`
+*and* from the regenerated initramfs, udev resolving the S30 to
+`kmod load mtgpu`, the full MUSA workload passing with GNOME alive). The one
+fact that can only be observed after a reboot is that **udev loads `mtgpu`
+before GDM and GNOME still reaches the login screen**.
+
+`scripts/compute-mode-boot-verify.sh` captures exactly that. It is read-only
+(no `modprobe`, no `insmod`/`rmmod`, no unbind/rebind, no config change) and
+writes its evidence to `/var/log/musa-fedora/compute-mode-boot-<UTC>.log`:
+
+```sh
+# interactive run (writes to ~/.musa-work by default output dir override)
+scripts/compute-mode-boot-verify.sh --out-dir ~/.musa-work/boot-verify --wait 0
+```
+
+It proves: udev autoload + `initstate=live`, the S30 bound to `mtgpu` with a
+render node, GDM/`graphical.target`/`gnome-shell` still up, no blacklist in
+`/etc/modprobe.d` or `modprobe -c`, and **no `mtgpu` BUG/Oops/NULL-dereference
+and no `Invalid cmd_type` in the current boot's kernel log**.
+
+To capture the evidence automatically on the next boot, a one-shot systemd
+unit runs the script at `graphical.target` and then disables and removes
+itself:
+
+```sh
+pkexec scripts/install-boot-verify.sh install     # arm the one-shot
+# ... reboot ...
+cat /var/log/musa-fedora/compute-mode-boot-latest.log
+pkexec scripts/install-boot-verify.sh status       # confirm it fired and left
+```
+
+The unit is skipped (`ConditionPathExists`) while a boot-time block is
+present, and `install` refuses to arm it if `mtgpu` is still blacklisted.
+`install-boot-verify.sh uninstall [--purge-logs]` removes it.
+
+If the post-boot log shows FAIL, or GNOME does not reach the login screen, the
+display stays on `i915`; log in on a console and restore the previous state
+with `pkexec scripts/compute-mode.sh disable && pkexec systemctl reboot`.
+
 ## Safety notes
 
 - The driver is never unloaded and the PCI device is never unbound or

@@ -1,0 +1,21 @@
+[Unit]
+Description=MUSA for Fedora — MTT S30 compute-mode boot verification (one-shot)
+Documentation=file:///home/axogm/Documents/project/musa-fedora/docs/compute-mode.md
+# Run once the display manager is up so the "GNOME survives the live driver"
+# half of the check is meaningful. The script polls for the module itself, so
+# ordering only matters for the GDM/GNOME assertions.
+After=display-manager.service graphical.target
+Wants=display-manager.service
+# Only relevant while compute mode is active (no boot-time block present).
+ConditionPathExists=!/etc/modprobe.d/blacklist-mtgpu.conf
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bash /home/axogm/Documents/project/musa-fedora/scripts/compute-mode-boot-verify.sh --systemd --wait 90 --out-dir /var/log/musa-fedora
+TimeoutStartSec=300
+RemainAfterExit=no
+Nice=10
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target

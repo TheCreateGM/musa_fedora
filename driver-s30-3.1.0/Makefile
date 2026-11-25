@@ -12,7 +12,9 @@ KERNELSRC ?= /lib/modules/${KERNELVER}/source
 # runs the real objtool unchanged when it can start and links without objtool
 # (with a loud warning) when it cannot. See scripts/objtool-safe.sh.
 MTGPU_REAL_OBJTOOL ?= $(KERNELDIR)/tools/objtool/objtool
-export MTGPU_REAL_OBJTOOL
+# Kernel tree for the wrapper's fallback path (rebuilt objtool cache key).
+MTGPU_KDIR ?= $(KERNELDIR)
+export MTGPU_REAL_OBJTOOL MTGPU_KDIR
 KBUILD_OBJTOOL := objtool="$(OBJ_DIR)/scripts/objtool-safe.sh"
 
 ifneq ($(wildcard $(KERNELSRC)),)

@@ -62,6 +62,8 @@ SOURCE_DIR="$BUILD_DIR/source"
 mkdir -p "$SOURCE_DIR/inc" "$SOURCE_DIR/src" "$SOURCE_DIR/objs/$ARCH"
 
 cp -p "$PROJECT_DIR/Makefile" "$CONFTEST_SRC" "$SOURCE_DIR/"
+mkdir -p "$SOURCE_DIR/scripts"
+cp -p "$PROJECT_DIR/driver-s30-3.1.0/scripts/objtool-safe.sh" "$SOURCE_DIR/scripts/"
 rsync -a --exclude='/conftest.h' "$PROJECT_DIR/inc/" "$SOURCE_DIR/inc/"
 rsync -a "$PROJECT_DIR/src/" "$SOURCE_DIR/src/"
 cp -p "$VENDOR_CORE" "$SOURCE_DIR/objs/$ARCH/mtgpu_core.o_binary"

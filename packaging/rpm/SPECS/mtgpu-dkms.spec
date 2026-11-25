@@ -12,7 +12,7 @@
 
 Name:           mtgpu-dkms
 Version:        3.1.0
-Release:        15%{?dist}
+Release:        16%{?dist}
 Summary:        DKMS kernel driver source for Moore Threads GPUs (mtgpu)
 
 License:        GPL-2.0-only
@@ -175,6 +175,23 @@ fi
 depmod -a >/dev/null 2>&1 || :
 
 %changelog
+* Wed Nov 25 2026 MUSA Fedora Team <musa@fedoraproject.org> - 3.1.0-16
+- Rebuild a working objtool instead of skipping it when the kernel tree's
+  prebuilt objtool cannot start (rawhide binutils SONAME drift, observed on
+  the 7.4.0-0.rc3 fedora-rawhide chroot). scripts/objtool-safe.sh now
+  compiles the kernel-devel objtool sources into a per-kernel cache (built
+  once, under a mkdir lock, with a clean environment), then execs the
+  rebuilt binary, so modules keep full ORC unwind metadata and objtool
+  validation instead of linking without them. Fedora kernel-devel ships
+  neither tools/build/Build nor gen-cpu-feature-names-x86.awk, so the
+  staging step synthesises the one-line Build fragment, uses the shipped
+  pre-generated arch/x86/lib/cpu-feature-names.c and stubs the git-only
+  sync-check lint, all inside a scratch copy (nothing under /usr/src is
+  modified). Parity on the 7.3.4 validation host with a forced-broken
+  prebuilt objtool: .orc_unwind 0x412f2 and .orc_unwind_ip 0x2b74c and
+  5502 warning lines, identical to a normal build; before this release the
+  fallback path produced mtgpu.ko with .orc_header only.
+
 * Wed Nov 25 2026 MUSA Fedora Team <musa@fedoraproject.org> - 3.1.0-15
 - Lower the default host backing-page size for the system (SVM) heap from
   0x40000 (256 KiB, order 6) to 0x4000 (16 KiB, order 2) in

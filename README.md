@@ -16,6 +16,50 @@ For the repair of the installed system's disk boot (GDM crash caused by the
 old base package shipping vendor Mesa DRI drivers), see
 [the 2026-11-23 boot fix](docs/boot-fix-2026-11-23.md).
 
+### Updates — 2026-11-25 (later session: objtool fallback, 3.1.0-16)
+
+- **A build-log audit (not just “build succeeded”) found objtool silently
+  skipped on rawhide**, where `kernel-devel`’s prebuilt objtool is linked to
+  the datestamped `libopcodes-2.47.50.20261029` SONAME that current binutils
+  no longer ships. Modules linked that way carry **no `.orc_unwind*`
+  metadata**. `mtgpu-dkms` 3.1.0-16 teaches
+  `scripts/objtool-safe.sh` to **rebuild a working objtool from the
+  kernel-devel sources** (cache dir, `mkdir` lock, clean environment) instead
+  of skipping — after working around two Fedora `kernel-devel` gaps
+  (missing `tools/build/Build`, missing `gen-cpu-feature-names-x86.awk` with
+  the generated `.c` shipped instead). A forced-broken-objtool build on the
+  host now produces **byte-identical ORC sections and the same 5502 warning
+  lines as a normal build**; the pre-fix skip path produced `.orc_header`
+  only. Full record: [objtool-fallback-2026-11-25](docs/objtool-fallback-2026-11-25.md).
+- **COPR re-verified after the fix: 20/20 checks, 9/9 chroots, and all 18
+  per-chroot build logs inspected individually** (0 errors, 0
+  `linking without objtool`, 5502 warnings in every DKMS chroot incl.
+  rawhide). New builds: `mtgpu-dkms` 3.1.0-16
+  ([11388916](https://copr.fedorainfracloud.org/coprs/build/11388916/),
+  [11388919](https://copr.fedorainfracloud.org/coprs/build/11388919/)) and
+  `musa-toolkit` 3.1.0-6 (README payload refresh;
+  [11388917](https://copr.fedorainfracloud.org/coprs/build/11388917/),
+  [11388920](https://copr.fedorainfracloud.org/coprs/build/11388920/)). The
+  host keeps `mtgpu-dkms` 3.1.0-15 while the module is live — no DKMS
+  transaction runs over a loaded driver; see the doc for the upgrade window.
+- **`musa-toolkit` 3.1.0-5 activated on the host** with `pkexec dnf
+  --refresh upgrade musa-toolkit` from the published COPR repo (gpg-checked;
+  `rpm -V` and `dnf check` clean). The stale host dnf metadata only offered
+  3.1.0-3 until `--refresh` pointed at the current `repodata`.
+- **Same-session re-verification of the live S30** (all in capped scopes, no
+  kernel fault in `journalctl -k -b`): `verify-musa.sh --skip-memcpy`
+  **13/0/2**, `check-musa-env.sh` **MUSA_ENV_STATUS: PASS**,
+  `test-vaapi.sh` **14/0/0**, and `s30-perf.sh` **PERF_STATUS: PASS**
+  (pinned H2D 6.4 / D2H 6.6 GB/s, 2.6 µs/launch, 51.8 GB/s triad at
+  `blockDim=1024`, 1.12× two-stream pipeline, kernel section `none`).
+- **Isolated container gate passed with the new set** (`mtgpu-dkms`
+  3.1.0-16, `musa-toolkit` 3.1.0-6): **13 passed, 0 failed**, scriptlets
+  disabled, physical S30 passed through. Two stalled attempts exposed a
+  container-mirror problem (curl error 28 at single-digit KiB/s); the test
+  now pins the container’s repos to the `dl.fedoraproject.org` baseurls —
+  same repos and packages, only mirror selection changes — and completes in
+  minutes with zero curl errors.
+
 ### Updates — 2026-11-25 (session)
 
 - **Boot-verify false FAIL root-caused and fixed.** The one-shot boot
@@ -171,9 +215,14 @@ be restored with `scripts/compute-mode.sh disable`.
 
 Installed set: `mtgpu-dkms` 3.1.0-15 (16 KiB system/SVM heap page),
 `mtgpu-firmware` 3.1.0-5, `musa-runtime` 1.5.4-7, `musa-runtime-va`
-1.5.4-7, `musa-sdk` 5.2.0-7 and `musa-toolkit` 3.1.0-4. The 3.1.0-5
-metapackage is a description-only update, published in COPR; install it on the
-next opportunity. `musa-runtime-display` is deliberately not installed.
+1.5.4-7, `musa-sdk` 5.2.0-7 and `musa-toolkit` 3.1.0-5 (activated from the
+published repo on 2026-11-25; `rpm -V` and `dnf check` clean). COPR also
+publishes `mtgpu-dkms` 3.1.0-16 (objtool fallback) and `musa-toolkit`
+3.1.0-6 (README payload); both are deliberately **not installed on the live
+host** — a DKMS transaction must not replace the module under a loaded
+`mtgpu`. Install them in a window where the module is not loaded, as
+described in [objtool-fallback-2026-11-25](docs/objtool-fallback-2026-11-25.md).
+`musa-runtime-display` is deliberately not installed.
 
 On the 2026-11-25 boot `scripts/verify-musa.sh --skip-memcpy` reports **13
 passed, 0 failed, 2 skipped** (the vendor memcpy test needs more host RAM than
@@ -196,7 +245,7 @@ the capped test scope allows; OpenCL is absent). The table below records the
 | VA-API on the S30 VPU | **verified 2026-11-25** | `musa-runtime-va` 1.5.4-7; vaInitialize, 20 profiles, H.264 encode round trip (14/0/0) |
 | Headless Vulkan | **verified, limited** | S30 device/queue, buffer allocation, and host-visible memory map passed; no rendering test |
 | Moore Threads OpenCL | **unavailable** | No MT ICD in the default loader; archived 2.1.1 ICD compute probe caused a kernel Oops (do not use) |
-| Copr publication | **verified 2026-11-25** | 9/9 chroots across both projects each publish all seven artifacts at dkms 3.1.0-15, firmware 3.1.0-5, runtime 1.5.4-7 (+va/display), sdk 5.2.0-7, toolkit 3.1.0-5; `scripts/verify-copr-chroots.sh` reports 20/20 checks — see [COPR verification](docs/copr-verification-2026-11-25.md); build success does not qualify driver loading |
+| Copr publication | **verified 2026-11-25 (late)** | 9/9 chroots across both projects each publish all seven artifacts at dkms 3.1.0-16, firmware 3.1.0-5, runtime 1.5.4-7 (+va/display), sdk 5.2.0-7, toolkit 3.1.0-6; `scripts/verify-copr-chroots.sh` reports 20/20 checks and all 18 per-chroot build logs of the last submission were inspected with 0 errors — see [COPR verification](docs/copr-verification-2026-11-25.md) and [objtool fallback](docs/objtool-fallback-2026-11-25.md); build success does not qualify driver loading |
 | Driver rebuild from source | **verified 2026-11-23** | `scripts/build-kernel-driver.sh` rebuilds `mtgpu` for `7.3.4-300.fc45.x86_64`; vermagic matches and the module aliases equal the installed module's |
 | Fedora 45 container + GPU test (2026-11-25 set) | **verified** | all seven RPMs installed in a throwaway Fedora 45 container with scriptlets disabled; `musaInfo`, vendor `muMemcpyTest` (1 GiB), `musart-smoke`, and an `mcc` `mp_10` vector-add ran on the S30: `13 passed, 0 failed` |
 | Historical Fedora container + GPU test (2026-11-17) | **verified** | the five-RPM set installed in a throwaway container and its packaged runtime and `mcc` ran on the S30: `13 passed, 0 failed` |

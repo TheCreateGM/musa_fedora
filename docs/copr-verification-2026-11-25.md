@@ -94,3 +94,34 @@ A successful COPR build only proves the source compiles and the RPMs are
 well-formed. It does not prove the module loads, the GPU binds, or any runtime
 path works. Those are separate, hardware-backed results:
 [hardware validation 2026-11-25](hardware-validation-2026-11-25.md).
+
+## Addendum — later the same day: mtgpu-dkms 3.1.0-16, musa-toolkit 3.1.0-6
+
+A per-chroot **log** audit of the build above (rather than trusting
+`state=succeeded`) found objtool being skipped on `fedora-rawhide`: the
+kernel-devel objtool's datestamped `libopcodes-…20261029` SONAME was gone
+from the chroot. The wrapper was repaired to rebuild a working objtool, and
+the two changed specs were rebuilt.
+
+| package | new release | builds |
+|---|---|---|
+| `mtgpu-dkms` | 3.1.0-16 | [11388916](https://copr.fedorainfracloud.org/coprs/build/11388916/) (musa-fedora), [11388919](https://copr.fedorainfracloud.org/coprs/build/11388919) (musa-mtt-s30) |
+| `musa-toolkit` | 3.1.0-6 | [11388917](https://copr.fedorainfracloud.org/coprs/build/11388917) (musa-fedora), [11388920](https://copr.fedorainfracloud.org/coprs/build/11388920) (musa-mtt-s30) |
+
+All four builds `succeeded`; `scripts/verify-copr-chroots.sh` (expectations
+updated) reports **20 passed, 0 failed**, i.e. the published `repodata` of
+all 9 chroots across both projects now advertises the seven-package set at
+dkms 3.1.0-16 and toolkit 3.1.0-6 (the other five artifacts are unchanged
+from the table above).
+
+All **18** per-chroot builder logs of this submission were fetched and
+checked: 0 `error:`/`BUILD FAILED` lines, `RPMResults finished` in every
+one, 0 `linking without objtool` occurrences, and 5502 warning lines in
+each of the 9 DKMS chroots — including `fedora-rawhide`, where objtool had
+previously been skipped. Details and raw excerpts:
+[objtool-fallback-2026-11-25](objtool-fallback-2026-11-25.md).
+
+The host keeps `mtgpu-dkms` 3.1.0-15 / `musa-toolkit` 3.1.0-5 while `mtgpu`
+is loaded; the -16/-6 pair is installed in a window without the live
+module. The isolated container gate with the -16/-6 RPMs reports **13
+passed, 0 failed**.

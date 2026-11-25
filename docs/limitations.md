@@ -13,12 +13,12 @@ normal boot through udev, with compute mode enabled. Installed stack:
 
 | Package | Version |
 |---|---|
-| `mtgpu-dkms` | 3.1.0-15 |
+| `mtgpu-dkms` | 3.1.0-15 on the host; 3.1.0-16 published (objtool fallback, [record](objtool-fallback-2026-11-25.md)) |
 | `mtgpu-firmware` | 3.1.0-5 |
 | `musa-runtime` | 1.5.4-7 |
 | `musa-runtime-va` | 1.5.4-7 |
 | `musa-sdk` | 5.2.0-7 |
-| `musa-toolkit` | 3.1.0-4 on the host; 3.1.0-5 published (metapackage description-only delta) |
+| `musa-toolkit` | 3.1.0-5 on the host; 3.1.0-6 published (README payload refresh) |
 
 `scripts/verify-musa.sh --skip-memcpy` reports **13 passed, 0 failed, 2
 skipped**. The skips are the vendor `muMemcpyTest` (it needs more host RAM than
@@ -67,8 +67,12 @@ not ABI-compatible with the 3.1.0 driver and must not be substituted for 1.5.4.
 
 ## Driver build boundary
 
-`mtgpu-dkms` 3.1.0-15 builds on Fedora 43, 44, 45, ELN and Rawhide x86_64 and
-carries the S30 PCI alias. The vendor core is an opaque prebuilt object; every
+`mtgpu-dkms` 3.1.0-16 (and -15) build on Fedora 43, 44, 45, ELN and Rawhide
+x86_64 and carry the S30 PCI alias. Since 3.1.0-16, a kernel-devel tree
+whose prebuilt objtool cannot start does not silently lose ORC metadata: the
+build compiles a working objtool from the kernel sources instead
+([objtool-fallback-2026-11-25](objtool-fallback-2026-11-25.md)). The vendor
+core is an opaque prebuilt object; every
 build emits objtool warnings from it, including missing-ENDBR relocations and
 RETPOLINE naked returns. Do not disable IBT/CET or rewrite vendor-core metadata
 to silence them.

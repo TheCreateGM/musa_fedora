@@ -140,3 +140,54 @@ initial plus toolkit 3.1.0-5 in both projects) succeeded across 9 chroots, and
 chroot's published `repodata` carries all seven artifacts at the expected
 versions. Build IDs and the submission workaround are recorded in
 [COPR verification 2026-11-25](copr-verification-2026-11-25.md).
+
+## Later same-day re-verification (05:45–05:55 UTC)
+
+The same boot was re-checked after the boot-verify fix described below.
+
+- `scripts/verify-musa.sh --skip-memcpy`: **13 passed, 0 failed, 2 skipped**
+  (vendor memcpy skipped for host RAM, Moore Threads OpenCL absent).
+- `scripts/verify-copr-chroots.sh`: **20 passed, 0 failed** — both projects,
+  all 9 chroots, latest build of every package `succeeded`, published set
+  matches (dkms 3.1.0-15, firmware 3.1.0-5, runtime 1.5.4-7, runtime-va
+  1.5.4-7, sdk 5.2.0-7, toolkit 3.1.0-5).
+- `scripts/s30-perf.sh` under `MemoryMax=3G MemorySwapMax=0`: **PERF_STATUS:
+  PASS**, pinned H2D 6.4 / D2H 6.5 GB/s, 2.7 µs/launch, 51.8 GB/s triad at
+  `blockDim=1024`, 1.13× two-stream pipeline, `musaDeviceSetCacheConfig`
+  still `musaErrorNotSupported (801)` on `mp_10`, kernel-message section
+  `none`.
+- `mthreads-gmi`: S30, driver 3.1.0, 44 °C, 266/4096 MiB, no running
+  compute processes.
+
+## Boot-verify false FAIL on this boot — root cause and fix
+
+The one-shot `musa-boot-verify.service` run at 23:53:34Z (early in this
+boot) logged **12 passed, 1 failed, 1 warnings** — `graphical.target is not
+active` plus `line 154: ((: 0\n0: arithmetic syntax error` — and a WARN
+`no gnome-shell process`. The desktop was never actually broken: at the
+time of writing `graphical.target` is active and a GNOME Wayland session is
+running on this boot, and the suite + benchmark results above were all
+produced on this same boot.
+
+Two real defects in `scripts/compute-mode-boot-verify.sh` caused it:
+
+1. **Race on `graphical.target`.** The unit orders
+   `After=display-manager.service` and polls `gdm`, but the
+   `graphical.target` check ran once, unpolled, before the target finished
+   activating. `display-manager.service` reaching active precedes
+   `graphical.target` reaching active.
+2. **`pgrep -c` fallback bug.** `pgrep -c gnome-shell` prints `0` and exits
+   1 when nothing matches; the `|| echo 0` fallback then appended a second
+   `0`, so the variable held `0\n0` and `(( n_shell > 0 ))` failed with the
+   arithmetic error seen in the log. (At 23:53 the login screen had no user
+   session yet, so pgrep legitimately matched nothing — the WARN itself was
+   correct.)
+
+The fix polls `graphical.target` within the same `WAIT_SECS` budget as
+`gdm` and sanitises the pgrep fallback (`${n_shell:-0}` with newlines
+stripped). A re-run on the live desktop reports **14 passed, 0 failed,
+0 warnings** — the same verdict the 05:45 UTC boot recorded before the
+ordering-cycle fix was reverted by its own one-shot removal. The service
+removed itself by design after this boot's run; re-arm it with
+`pkexec scripts/install-boot-verify.sh install` when a future boot needs
+evidence.

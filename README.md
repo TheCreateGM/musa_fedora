@@ -18,6 +18,18 @@ old base package shipping vendor Mesa DRI drivers), see
 
 ### Updates — 2026-11-25 (session)
 
+- **Boot-verify false FAIL root-caused and fixed.** The one-shot boot
+  verifier on this boot logged 12/1/1 (`graphical.target is not active` plus
+  an `0\n0` arithmetic error): the desktop was fine. Two script defects — an
+  unpolled `graphical.target` check racing GDM startup, and a `pgrep -c ||
+  echo 0` fallback producing `0\n0` — are fixed in
+  `scripts/compute-mode-boot-verify.sh`; the re-run on the live desktop
+  reports **14 passed, 0 failed, 0 warnings**. See the
+  [2026-11-25 record](docs/hardware-validation-2026-11-25.md).
+- **Same-day re-verification on this boot:** suite **13/0/2**
+  (`--skip-memcpy`), COPR **20/20 checks across all 9 chroots**, and a fresh
+  `s30-perf.sh` run (**PERF_STATUS: PASS**, 6.4/6.5 GB/s pinned H2D/D2H,
+  2.7 µs/launch, 51.8 GB/s triad, 1.13× pipeline) with zero kernel faults.
 - **Driver 3.1.0-15 fixes the host-memory failure.** The system/SVM heap page
   size was `0x40000` (256 KiB, order 6); on this 7.4 GiB host that request
   failed, `musaMallocHost()` returned `musaErrorOutOfMemory` and

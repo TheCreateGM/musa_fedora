@@ -134,7 +134,10 @@ done
 # ------------------------------------------------------------------- session
 hdr "4. desktop session (must survive the live driver)"
 # The unit is ordered after display-manager.service, but "active" precedes
-# the login screen; poll briefly so an early run is not a false failure.
+# the login screen and graphical.target can still be starting when gdm is
+# already running; poll both so an early run is not a false failure
+# (2026-11-25 boot logged "graphical.target is not active" for exactly
+# this reason while GNOME was fine seconds later).
 deadline=$(( $(date +%s) + WAIT_SECS ))
 until systemctl is-active --quiet gdm 2>/dev/null; do
     (( $(date +%s) < deadline )) || break
@@ -145,12 +148,20 @@ if systemctl is-active --quiet gdm 2>/dev/null; then
 else
     bad "gdm is not active within ${WAIT_SECS}s"
 fi
+until systemctl is-active --quiet graphical.target 2>/dev/null; do
+    (( $(date +%s) < deadline )) || break
+    sleep 2
+done
 if systemctl is-active --quiet graphical.target 2>/dev/null; then
     ok "graphical.target is active"
 else
-    bad "graphical.target is not active"
+    bad "graphical.target is not active within ${WAIT_SECS}s"
 fi
-n_shell="$(pgrep -c gnome-shell 2>/dev/null || echo 0)"
+# pgrep -c prints "0" and exits 1 when nothing matches; appending "|| echo 0"
+# therefore produced "0\n0" and an arithmetic error (2026-11-25 boot log).
+n_shell="$(pgrep -c gnome-shell 2>/dev/null)"
+n_shell="${n_shell:-0}"
+n_shell="${n_shell//$'\n'/}"
 if (( n_shell > 0 )); then
     ok "gnome-shell running ($n_shell process(es))"
 else

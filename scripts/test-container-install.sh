@@ -88,6 +88,25 @@ cat > "$WORK/ctx/Containerfile" <<EOF
 FROM ${BASE_IMAGE}
 COPY RPMS/ /rpms/
 COPY tests/ /tests/
+# The default metalink resolved to mirrors throttled below dnf's curl
+# low-speed limit on 2026-11-25 (repeated curl error 28, single-digit KiB/s
+# on ftp.yz.yamagata-u.ac.jp vs ~58 KiB/s on the official CDN), which stalled
+# the dependency install for over an hour. Pin the repo layer to the
+# dl.fedoraproject.org baseurls that ship behind the same metalink: same
+# repos, same packages, same versions — only the mirror selection changes.
+# dnf5 in the fedora base image keeps its defaults under /usr/share/dnf5/
+# repos.d (the image's /etc/yum.repos.d is empty) and the commented baseurl
+# template uses the placeholder host download.example. Only repo files that
+# carry that template are rewritten; fedora-cisco-openh264 has no baseurl
+# template and keeps its metalink.
+RUN for f in /usr/share/dnf5/repos.d/*.repo /etc/yum.repos.d/*.repo; do \
+        [ -f "\$f" ] || continue; \
+        grep -q '^#baseurl=http://download.example/pub/' "\$f" || continue; \
+        sed -i -e 's|^metalink=|#metalink=|' \
+               -e 's|^#baseurl=|baseurl=|' \
+               -e 's|baseurl=http://download.example/pub/|baseurl=https://dl.fedoraproject.org/pub/|' \
+               "\$f"; \
+    done
 # Resolve declared dependencies from the Fedora repos (this is what proves the
 # SDK package pulls the C++ headers mcc needs), but suppress RPM scriptlets so
 # no kernel module is built or loaded inside the container.

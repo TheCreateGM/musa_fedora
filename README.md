@@ -16,6 +16,31 @@ For the repair of the installed system's disk boot (GDM crash caused by the
 old base package shipping vendor Mesa DRI drivers), see
 [the 2026-11-23 boot fix](docs/boot-fix-2026-11-23.md).
 
+### Updates — 2026-11-25 (session)
+
+- **Driver 3.1.0-15 fixes the host-memory failure.** The system/SVM heap page
+  size was `0x40000` (256 KiB, order 6); on this 7.4 GiB host that request
+  failed, `musaMallocHost()` returned `musaErrorOutOfMemory` and
+  `scripts/s30-perf.sh` aborted. It is now `0x4000` (16 KiB, order 2), the
+  size the driver already used for its non-4K heap. The patched module runs the
+  benchmark with `PERF_STATUS: PASS`, zero `warn_alloc` entries in the boot
+  journal, and `musa-alloc-latency` p50 = 0.064 ms. The earlier 16 MiB
+  reading of order 6 was wrong; the corrected analysis is in
+  [the order-6 root cause](docs/root-cause-order6-warn-alloc-2026-11-24.md).
+- **VA-API is packaged separately and verified.** `musa-runtime-va` 1.5.4-7
+  ships only the S30 VPU driver into `/usr/lib64/dri`, so it is safe next to
+  an i915 desktop. `scripts/hardware/test-vaapi.sh` reports **14 passed, 0
+  failed, 0 skipped**: `vaInitialize 1.24`, 20 profiles, and an
+  `h264_vaapi` encode whose 425 503-byte stream decodes cleanly. See
+  [VA-API](docs/vaapi.md).
+- **Baseline suite on the patched stack:** `scripts/verify-musa.sh
+  --skip-memcpy` reports **13 passed, 0 failed, 2 skipped** (vendor memcpy
+  skipped for host RAM, OpenCL absent), with driver, runtime, `mcc`,
+  `mp_10` compute, FP64 and headless Vulkan all passing.
+- **Performance benchmark:** 6.4/6.4 GB/s pinned H2D/D2H, 2.8 µs/launch,
+  52.0 GB/s triad at `blockDim=1024`, 1.11× two-stream pipeline — inside the
+  ranges recorded before the heap-page change, so the fix costs no bandwidth.
+
 ### Updates — 2026-11-24 (session)
 
 - **Compute mode survived its first real reboot (05:45 UTC, clean boot).**
@@ -121,26 +146,32 @@ The project targets the vendor's own S30 stack — **mtgpu driver 3.1.0** plus
 
 ## Status
 
-**Current host (2026-11-24, after the 05:45 UTC reboot):** compute mode is
-enabled and has survived a real reboot. `/etc/modprobe.d` no
-longer blacklists `mtgpu`, the regenerated initramfs carries no blacklist, and
-udev matches the S30's PCI modalias to `kmod load mtgpu`. The module is live
-with the documented headless parameters (`display=none disable_fbdev=1
-mtgpu_drm_major=2`), `/dev/mtgpu.0` and an `mtgpu` DRM render node exist, and
-GNOME runs on Intel `i915`. The vendor Mesa DRI drivers are not installed
-(`musa-runtime-display` is optional), which removes the 2026-11-23 GDM crash
-condition. The previous boot-time block is preserved in
-`/var/backups/musa-fedora-compute-mode/20261124T020848Z/` and can be restored
-with `scripts/compute-mode.sh disable`.
+**Current host (2026-11-25):** compute mode is enabled and has survived real
+reboots. `/etc/modprobe.d` no longer blacklists `mtgpu`, the regenerated
+initramfs carries no blacklist, and udev matches the S30's PCI modalias to
+`kmod load mtgpu`. The module is live with the documented headless parameters
+(`display=none disable_fbdev=1 mtgpu_drm_major=2`), `/dev/mtgpu.0` and an
+`mtgpu` DRM render node exist, and GNOME runs on Intel `i915`. The vendor Mesa
+DRI drivers are not installed (`musa-runtime-display` is optional), which
+removes the 2026-11-23 GDM crash condition. The previous boot-time block is
+preserved in `/var/backups/musa-fedora-compute-mode/20261124T020848Z/` and can
+be restored with `scripts/compute-mode.sh disable`.
 
-On the 05:45 UTC clean boot `scripts/verify-musa.sh` reports **14 passed,
-0 failed, 1 skipped** (OpenCL skip);
-The table below records the 2026-11-17, 2026-11-23 and 2026-11-24 hardware runs.
+Installed set: `mtgpu-dkms` 3.1.0-15 (16 KiB system/SVM heap page),
+`mtgpu-firmware` 3.1.0-5, `musa-runtime` 1.5.4-7, `musa-runtime-va`
+1.5.4-7, `musa-sdk` 5.2.0-7 and `musa-toolkit` 3.1.0-4. The 3.1.0-5
+metapackage is a description-only update, published in COPR; install it on the
+next opportunity. `musa-runtime-display` is deliberately not installed.
+
+On the 2026-11-25 boot `scripts/verify-musa.sh --skip-memcpy` reports **13
+passed, 0 failed, 2 skipped** (the vendor memcpy test needs more host RAM than
+the capped test scope allows; OpenCL is absent). The table below records the
+2026-11-17 through 2026-11-25 hardware runs.
 
 | Layer | State | Evidence |
 |---|---|---|
 | PCI enumeration | **verified** | `lspci -nn` → `1ed5:0102` |
-| `mtgpu` driver / device nodes | **verified** | module live; S30 render node `/dev/dri/renderD130`; `/dev/mtgpu.0` |
+| `mtgpu` driver / device nodes | **verified** | module live; S30 render node (`/dev/dri/renderD129` on this boot); `/dev/mtgpu.0` |
 | IOMMU | **verified** | `intel_iommu=on iommu=pt`; S30 assigned to IOMMU group 11 |
 | Device telemetry | **verified** | `musaInfo` and `mthreads-gmi` both report MTT S30, 8 SMs, 3.97 GB on the clean 05:45 boot; `mthreads-gmi` fails only in live-module-replacement boots (documented) |
 | MUSA runtime discovery | **verified** | MUSA runtime 1.5.4 `musaInfo` reports one MTT S30 |
@@ -149,12 +180,14 @@ The table below records the 2026-11-17, 2026-11-23 and 2026-11-24 hardware runs.
 | Compiler target | **verified** | MUSA 5.2.0 `mcc` compiled `mp_10` vector-add |
 | GPU kernel execution | **verified** | vector-add completed; all 1,048,576 results matched |
 | MUSA compute operations | **verified** | SAXPY, shared reduction, atomics, constant memory, device math, 2D launch, D2D copy, and FP64 passed |
+| Host-memory allocation (SVM heap 16 KiB) | **verified 2026-11-25** | 3.1.0-15 fixed the order-6 heap page; alloc latency p50 0.064 ms, zero `warn_alloc`, benchmark PASS |
+| VA-API on the S30 VPU | **verified 2026-11-25** | `musa-runtime-va` 1.5.4-7; vaInitialize, 20 profiles, H.264 encode round trip (14/0/0) |
 | Headless Vulkan | **verified, limited** | S30 device/queue, buffer allocation, and host-visible memory map passed; no rendering test |
 | Moore Threads OpenCL | **unavailable** | No MT ICD in the default loader; archived 2.1.1 ICD compute probe caused a kernel Oops (do not use) |
-| Copr package builds | **verified 2026-11-23** | 9/9 chroots across both projects carry the current package set and every build reports `succeeded` — see [COPR verification](docs/copr-verification-2026-11-23.md) and `scripts/verify-copr-chroots.sh`; build success does not qualify driver loading |
+| Copr publication | **verified 2026-11-25** | 9/9 chroots across both projects each publish all seven artifacts at dkms 3.1.0-15, firmware 3.1.0-5, runtime 1.5.4-7 (+va/display), sdk 5.2.0-7, toolkit 3.1.0-5; `scripts/verify-copr-chroots.sh` reports 20/20 checks — see [COPR verification](docs/copr-verification-2026-11-25.md); build success does not qualify driver loading |
 | Driver rebuild from source | **verified 2026-11-23** | `scripts/build-kernel-driver.sh` rebuilds `mtgpu` for `7.3.4-300.fc45.x86_64`; vermagic matches and the module aliases equal the installed module's |
-| Historical Fedora container + GPU test | **verified** | the 2026-11-17 five-RPM set installed in a throwaway Fedora 45 container and its packaged runtime and `mcc` ran on the S30: `13 passed, 0 failed` |
-| Current Fedora 45 package install + compiler | **compile-only passed** | current Copr RPMs installed in a disposable container with scriptlets disabled; `rpm -V`, `dnf check`, and the packaged compiler/header smoke check passed; no GPU runtime query was made |
+| Fedora 45 container + GPU test (2026-11-25 set) | **verified** | all seven RPMs installed in a throwaway Fedora 45 container with scriptlets disabled; `musaInfo`, vendor `muMemcpyTest` (1 GiB), `musart-smoke`, and an `mcc` `mp_10` vector-add ran on the S30: `13 passed, 0 failed` |
+| Historical Fedora container + GPU test (2026-11-17) | **verified** | the five-RPM set installed in a throwaway container and its packaged runtime and `mcc` ran on the S30: `13 passed, 0 failed` |
 
 Historical verification command on 2026-11-17: `scripts/verify-musa.sh` — **13 passed,
 0 failed, 1 skipped**. It must not be read as a current-host result. The skip is Moore Threads OpenCL: the loader found

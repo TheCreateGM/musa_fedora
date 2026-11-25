@@ -158,7 +158,8 @@ module reload are shown for understanding, not as live knobs:
 | `mtgpu_pstate_mode` | `1` | Power-state policy |
 | `mtgpu_sched_mode` | `2` | Scheduler mode; `mtgpu_sched_host_policy=1`, `mtgpu_sched_early_submit=Y` |
 | `mtgpu_vram_size_total` | `17179869184` | **Not the device size.** It is a module default of 16 GiB; the real S30 is 4 GiB and the runtime reports 4267532288 bytes |
-| `GeneralNon4KHeapPageSize` | `0x4000` | 16 KiB (order 2) heap page size — unrelated to the order-6 warnings below |
+| `GeneralNon4KHeapPageSize` | `0x4000` | 16 KiB (order 2) non-4K heap page size |
+| `PVRSRV_APPHINT_GENERALSVMHEAPPAGESIZE` | `0x4000` (driver 3.1.0-15) | System/SVM heap page used for host-backed buffer objects; was `0x40000` (256 KiB, order 6) through 3.1.0-14. See [the order-6 root cause](root-cause-order6-warn-alloc-2026-11-24.md) |
 
 These are load-time module parameters. Changing one requires a module reload
 or reboot; **do not reload `mtgpu` as a routine experiment** — a historical
@@ -174,11 +175,21 @@ The driver creates buffer objects through `PhysmemNewRamBackedPMR()`
 (`OSAllocUserPages()`, `GFP_USER|__GFP_COMP`), so large `musaMalloc()` and
 pinned allocations consume **host** memory as well as device memory.
 
-On 2026-11-24 a 64 MiB-per-buffer benchmark produced `page allocation failure:
-order:6` warnings under a `user.slice` memory cgroup with 256 MiB
-`memory.min`, while `MemAvailable` was ~2 GiB and swap was in use. Reducing
-the working set to 32 MiB and the warnings stopped, and the run completed.
-`warn_alloc` is non-fatal — the run still passed — but it is a real signal:
+On 2026-11-24 a benchmark produced `page allocation failure: order:6`
+warnings under a `user.slice` memory cgroup with 256 MiB `memory.min`, while
+`MemAvailable` was ~2 GiB and swap was in use. **order:6 is 64 pages = 256 KiB,
+not 16 MiB**; it matched the driver's `PVRSRV_APPHINT_GENERALSVMHEAPPAGESIZE`
+(`0x40000`) exactly. Every host-backed buffer object is allocated in units of
+that heap page, so the failing size came from the driver, not from the
+benchmark's working set.
+
+`mtgpu-dkms` 3.1.0-15 changes that heap page to `0x4000` (16 KiB, order 2),
+the size the driver already used for its non-4K heap. On 2026-11-25 the patched
+module ran with **zero** `warn_alloc` entries, `s30-perf.sh` reported
+`PERF_STATUS: PASS`, and `tests/musa-alloc-latency.mu` measured
+`p50=0.064 ms`.
+
+`warn_alloc` is non-fatal once, but it is a real signal:
 
 - size GPU working sets against **host** free memory, not just the 4 GiB device;
 - `scripts/s30-perf-profile.sh` reports `MemAvailable` and flags the low case;
@@ -192,9 +203,11 @@ reproduction recipe, is in
 
 The benchmark now also **releases each stage's staging buffers before the
 next stage allocates its own** (`musaFreeHost()` between the MEMBW and OVERLAP
-sections). Keeping both sets alive at once re-introduced the order:6 warning
-even at 32 MiB per buffer, because the driver's 16 MiB contiguous allocation
-is as sensitive to the *total* live footprint as to the per-buffer size.
+sections). Keeping both sets alive at once re-introduced the order-6 warning
+even at 32 MiB per buffer, because the number of 256 KiB heap pages the driver
+requests grows with the *total* live footprint, not just the per-buffer size.
+The driver-side page-size fix removes the order-6 request; releasing stage
+buffers early remains good hygiene and keeps the host footprint flat.
 
 ## Logging noise that is *not* a fault
 

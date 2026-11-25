@@ -1,27 +1,19 @@
 # Root cause: `page allocation failure: order:6` from the mtgpu driver
 
-**Date:** 2026-11-24
+**Date:** 2026-11-24 (analysis), resolved 2026-11-25 in `mtgpu-dkms` 3.1.0-15
 **Host:** Fedora 45, kernel `7.3.4-300.fc45.x86_64`, driver `mtgpu` 3.1.0
-**Severity:** non-fatal (`warn_alloc`), but a real signal
-**Status:** root-caused and worked around in the benchmark; the underlying
-driver behaviour is unchanged.
+**Severity:** non-fatal but real; it hard-failed `musaMallocHost()` on this host
+**Status:** fixed in the packaged driver (heap page size 256 KiB → 16 KiB) and
+re-verified on the physical MTT S30.
 
 ## Symptom
 
 While running `tests/musa-perf.mu` (the MTT S30 performance benchmark) the
-kernel logs a page-allocation warning:
+kernel logged a page-allocation warning:
 
 ```
 musa-perf: page allocation failure: order:6, mode:0x140cc0(GFP_USER|__GFP_COMP),
             nodemask=(null),cpuset=user.slice,mems_allowed=0
-```
-
-Occurrences on this boot (all six attributed to the benchmark process by its
-`Comm:` field):
-
-```
-journalctl -k -b | grep -c "order:6"
-6
 ```
 
 Full stack for one occurrence:
@@ -45,102 +37,99 @@ alloc_pages_noprof+0x49/0xe0
  mtgpu_ioctl+0x1c4/0x210 [mtgpu]
 ```
 
+On 2026-11-25 the same allocation path failed outright instead of only warning:
+`musaMallocHost()` returned `musaErrorOutOfMemory`, and `scripts/s30-perf.sh`
+aborted before producing a `PERF_STATUS`.
+
 ## Root cause
 
-`order:6` is a **4096-page (16 MiB) physically contiguous** host allocation.
+**An order-6 allocation is 64 pages, i.e. 256 KiB — not 16 MiB.** The earlier
+revision of this document said 16 MiB, which was wrong by a factor of 64 and
+sent the investigation in the wrong direction. The correct arithmetic:
 
-The S30 has no dedicated VRAM on this board: the driver backs every buffer
-object with **page-backed host RAM**. The chain above shows exactly that:
+```
+order 6  = 2^6 pages = 64 pages
+64 × 4 KiB = 256 KiB
+```
 
-`mtgpu_bo_create_ioctl` → `PhysmemNewRamBackedPMR` → `PhysmemNewLocalRamBackedPMR`
-→ `PhysmemCreateSystemMemPMR` → `AllocSystemPages` → `OSAllocUserPages` →
-`OSAllocMem` → `alloc_pages`.
+The S30 has no dedicated VRAM on this board: the driver backs buffer objects
+with **host RAM**. For this system-memory path the allocation unit is the
+driver's system/SVM heap page size, defined in `inc/config_kernel.h` as:
 
-So every `musaMalloc()`, every pinned `musaMallocHost()` allocation, and every
-DMA staging buffer is a host allocation through this path. `mode:
-0x140cc0(GFP_USER|__GFP_COMP)` confirms it: `__GFP_COMP` asks the kernel to
-**compaction** to satisfy the order-6 request, i.e. the driver *knows* it needs
-a large contiguous range.
+```c
+#define PVRSRV_APPHINT_GENERALSVMHEAPPAGESIZE 0x40000   /* 256 KiB, order 6 */
+```
 
-The allocation fails because the host cannot produce a 16 MiB contiguous range
-at that moment. Three host conditions combine on this machine:
+That exactly matches the failing order. The request therefore was not driven by
+the size of any user buffer; it was the driver's own 256 KiB heap page. On this
+7.4 GiB host the memory cgroup and fragmentation frequently left no order-6
+block: at the time of the first failure `/proc/buddyinfo` showed **0 free
+order-6 blocks** and thousands of order-2 blocks. `GFP_USER|__GFP_COMP` made
+each request even harder by asking the kernel to compact.
 
-1. `MemTotal` is only 7.4 GiB, and `MemAvailable` was ~2–3 GiB.
-2. `SwapTotal` is 7.4 GiB with ~3.5 GiB in use, so the kernel is actively
-   reclaiming (`pgsteal_kswapd` in the tens of millions of pages).
-3. `user.slice` carries `memory.min = 262144000` (250 MiB), which pins a
-   protected floor inside the cgroup the benchmark runs in, so reclaim cannot
-   free the whole shortfall.
+`OSAllocUserPages()` retries the same order up to five times and has **no
+lower-order fallback**, so a fragmented host hard-fails the request.
 
-`cpuset=user.slice` in the message is the cgroup, and `mems_allowed=0` means
-the allocation was refused **because the cgroup's memory limit could not be
-raised**, not because the machine was out of memory in general.
+## Resolution (driver 3.1.0-15)
 
-The warning is `warn_alloc`, not a page fault or an OOM kill. The kernel
-recovers and the allocation is eventually satisfied by the driver's retry
-logic: `OSAllocUserPages` retries the same order up to 5 times before it
-would hard-fail. There is **no lower-order fallback**, so a host that cannot
-produce 16 MiB contiguous after 5 retries hard-fails the allocation instead of
-degrading gracefully.
+`PVRSRV_APPHINT_GENERALSVMHEAPPAGESIZE` is now **`0x4000`** (16 KiB, order 2):
 
-## Why the benchmark triggered it
+```c
+#define PVRSRV_APPHINT_GENERALSVMHEAPPAGESIZE 0x4000    /* 16 KiB, order 2 */
+```
 
-The driver allocates a **16 MiB contiguous** region for the PMR regardless of
-how small the user's request is. The trigger is therefore the *total live
-footprint* of page-backed buffers, not the size of any single user buffer.
+This is the same page size the vendor driver already uses for its non-4K heap
+(`GeneralNon4KHeapPageSize 0x4000`), so it is an existing, exercised driver
+path rather than a new invention. The module was rebuilt through DKMS, the host
+rebooted, and the S30 bound the patched module; `/usr/src/mtgpu-3.1.0/inc/config_kernel.h`
+and the packaged `mtgpu-dkms-3.1.0.tar.gz` both contain `0x4000`.
 
-This was measured directly during this work:
+Verified on the physical S30 on 2026-11-25:
 
-| Configuration | Result |
+| Check | Result |
 |---|---|
-| 64 MiB per buffer (earlier revision) | `order:6` warnings, run still passed |
-| 32 MiB per buffer, all stage buffers alive at once | `order:6` warnings (2026-11-24 09:29:34) |
-| 32 MiB per buffer, each stage's staging freed before the next stage allocates | **no warnings** |
+| `journalctl -k -b \| grep -c 'page allocation failure\|warn_alloc'` | **0** |
+| `tests/musa-alloc-latency.mu` (32 MiB, 60 rounds) | `p50=0.064 ms p95=0.074 ms max=0.085 ms`, `ALLOC_LATENCY: PASS` |
+| `scripts/s30-perf.sh` | `PERF_STATUS: PASS (1 skipped)`, no allocation failure, 6.4 GB/s pinned H2D |
+| `scripts/verify-musa.sh --skip-memcpy` | 13 passed, 0 failed, 2 skipped |
 
-The last row is the fix that is in the tree: `tests/musa-perf.mu` now calls
-`musaFreeHost()` on the MEMBW staging buffers before the OVERLAP section
-allocates its own, so the total live page-backed footprint stays flat instead
-of growing with each section.
+The page-size change does not reduce GPU memory bandwidth: the benchmark's
+pinned H2D/D2H still measures 6.4/6.4 GB/s and the triad kernel 52.0 GB/s,
+inside the ranges recorded before the change.
 
-Verified after the change — four consecutive runs, no `order:6`:
+## Why this is a driver fix and not a host tuning workaround
 
-```
-$ for i in 1 2 3 4; do scripts/s30-perf.sh --no-build 2>&1 \
-      | grep -E "speedup=|PERF_STATUS|allocation failure"; done
-        speedup=1.13x
-PERF_STATUS: PASS (1 skipped)
-        speedup=1.14x
-PERF_STATUS: PASS (1 skipped)
-        speedup=1.11x
-PERF_STATUS: PASS (1 skipped)
-        speedup=1.14x
-PERF_STATUS: PASS (1 skipped)
-```
+Shrinking the benchmark's working set and freeing staging buffers between
+stages (the earlier mitigation) only reduced the number of order-6 requests; it
+did not make them satisfiable. The allocating unit belonged to the driver, so
+the durable fix is in the driver's configured heap page size. The change keeps
+the retry behaviour and the allocation path identical; it only makes each
+request an order-2 allocation that this host can satisfy reliably.
 
 ## Guidance
 
 - **Size GPU working sets against host free memory, not against the 4 GiB
-  device.** On this host the device memory is *also* host memory.
-- **Free a stage's staging buffers before allocating the next stage's.** This
-  is the single change that removed the warnings here.
-- **Keep the per-allocation size ≤ 32 MiB** in benchmarks and applications
-  running under a `user.slice` with a `memory.min` floor.
-- **Watch `MemAvailable` before a large GPU job**, not just before a large
-  *system* job. `scripts/s30-perf-profile.sh` reports this.
+  device.** On this host the device memory is also host memory.
+- **Watch `MemAvailable` before a large GPU job.** `scripts/s30-perf-profile.sh`
+  reports it and flags the low case.
+- **Do not treat `warn_alloc` as cosmetic.** It is recoverable once, but with no
+  lower-order fallback a persistent shortfall becomes `musaErrorOutOfMemory`
+  inside an application.
+- If a future vendor drop restores a larger SVM heap page, re-check
+  `/proc/buddyinfo` for the matching order before running large workloads.
 
 ## What was *not* done
 
-- No module parameter was changed. `mtgpu_page_size` and
-  `GeneralNon4KHeapPageSize` were considered; neither affects the order of the
-  driver's *host* allocation, and changing them requires a module reload,
-  which this project deliberately does not do as a routine experiment — see
-  [the rebind fault](root-cause-rebind-2026-11-16.md).
-- No boot-time reservation or `vm.*` tuning was applied. The fix belongs in
-  the allocating application, not in the host's memory configuration.
-- The driver was **not** blacklisted. The warning is not a driver fault: the
-  allocation was refused by the cgroup, and the driver recovered every time.
+- No boot-time reservation or `vm.*` tuning was applied. The fix is the driver's
+  allocation unit, which is portable to any host.
+- `GeneralNon4KHeapPageSize` was left at `0x4000`; it is a different heap and
+  was already the value the driver used.
+- The driver was **not** blacklisted and the module was not unloaded/reloaded as
+  an experiment; the change took effect through the normal reboot with compute
+  mode enabled.
 
 ## See also
 
 - [Performance tuning](performance-tuning.md)
 - [Limitations](limitations.md)
+- [2026-11-25 hardware validation](hardware-validation-2026-11-25.md)

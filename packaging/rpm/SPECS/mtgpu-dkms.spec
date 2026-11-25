@@ -12,7 +12,7 @@
 
 Name:           mtgpu-dkms
 Version:        3.1.0
-Release:        14%{?dist}
+Release:        15%{?dist}
 Summary:        DKMS kernel driver source for Moore Threads GPUs (mtgpu)
 
 License:        GPL-2.0-only
@@ -175,6 +175,17 @@ fi
 depmod -a >/dev/null 2>&1 || :
 
 %changelog
+* Wed Nov 25 2026 MUSA Fedora Team <musa@fedoraproject.org> - 3.1.0-15
+- Lower the default host backing-page size for the system (SVM) heap from
+  0x40000 (256 KiB, order 6) to 0x4000 (16 KiB, order 2) in
+  inc/config_kernel.h. The S30 has no VRAM and backs every buffer object
+  with host RAM, and on a 7.4 GiB Fedora host order-6 blocks are frequently
+  exhausted, so musaMallocHost()/musaMalloc() failed with
+  musaErrorOutOfMemory after the kernel logged
+  "page allocation failure: order:6, mode:0x140cc0(GFP_USER|__GFP_COMP)".
+  0x4000 is the value the driver already uses for its non-4K heap, so the
+  code path is not new. See docs/host-memory-fragmentation.md.
+
 * Wed Nov 25 2026 MUSA Fedora Team <musa@fedoraproject.org> - 3.1.0-14
 - Add an objtool wrapper (scripts/objtool-safe.sh) and pass it to kbuild so
   out-of-tree module builds do not fail when a Fedora kernel-devel objtool is

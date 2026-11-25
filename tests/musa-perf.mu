@@ -46,13 +46,22 @@
         }                                                                    \
     } while (0)
 
-/* 32 MiB: comfortably above the size at which PCIe/host transfer paths
- * saturate, while keeping the run small on this 7.4 GiB host. The driver
- * creates buffer objects through PhysmemNewRamBackedPMR(), i.e. page-backed
- * system RAM, so every device allocation here also consumes host memory; a
- * larger footprint produced order:6 warn_alloc warnings in a user.slice
- * memory cgroup (min protection 256000kB) without failing the run. */
-#define BYTES        (32u * 1024u * 1024u)
+/* Working-set size. 32 MiB is comfortably above the size at which PCIe/host
+ * transfer paths saturate, while keeping the run small on this 7.4 GiB host.
+ * The driver creates buffer objects through PhysmemNewRamBackedPMR(), i.e.
+ * page-backed system RAM, so every device allocation here also consumes host
+ * memory; a larger footprint produced order:6 warn_alloc warnings in a
+ * user.slice memory cgroup (min protection 256000kB) without failing the run.
+ *
+ * Override with -DBYTES_MIB=<n> when the host is tighter than that. The main()
+ * allocation block also backs off by halving if pinned staging cannot be
+ * obtained, and reports the size it ended up using, so a run on a loaded
+ * desktop still produces a comparison instead of aborting at the first
+ * musaMallocHost(). */
+#ifndef BYTES_MIB
+#define BYTES_MIB    32u
+#endif
+#define BYTES        (BYTES_MIB * 1024u * 1024u)
 #define TRIAD_FLOATS (BYTES / 4u)
 #define CHUNK_FLOATS (TRIAD_FLOATS / NUM_CHUNKS)
 #define NUM_CHUNKS   8
@@ -62,6 +71,7 @@
 static int g_fails = 0;
 static int g_skips = 0;
 static int g_sm = 0;   /* multiprocessor count, read once from the device */
+static size_t g_pin_bytes = BYTES; /* staging size actually obtained */
 
 static void section(const char *name)
 {
@@ -610,7 +620,7 @@ static void bench_cache(float *ha, void *da)
 static void bench_overlap(float *page_a, float *page_b, void *dev_a,
                           void *dev_b, void *dev_c, float *page_c)
 {
-    unsigned chunk_bytes = BYTES / NUM_CHUNKS;
+    unsigned chunk_bytes = (unsigned)(g_pin_bytes / NUM_CHUNKS);
     unsigned chunk_floats = chunk_bytes / sizeof(float);
     unsigned bd = 256;
     double t0, t1, t_serial, t_pipelined;
@@ -621,11 +631,13 @@ static void bench_overlap(float *page_a, float *page_b, void *dev_a,
     /* Both variants below must use the SAME staging model, otherwise this
      * comparison measures pageable-vs-pinned instead of serial-vs-pipelined.
      * The serial path therefore also stages through pinned memory. */
-    CHECK(musaMallocHost(&pin_a, BYTES));
-    CHECK(musaMallocHost(&pin_b, BYTES));
-    CHECK(musaMallocHost(&pin_c, BYTES));
-    memcpy(pin_a, page_a, BYTES);
-    memcpy(pin_b, page_b, BYTES);
+    /* If main() had to shrink the staging size, keep the same basis here so
+     * the pipeline is compared against the serial loop over equal bytes. */
+    CHECK(musaMallocHost(&pin_a, g_pin_bytes));
+    CHECK(musaMallocHost(&pin_b, g_pin_bytes));
+    CHECK(musaMallocHost(&pin_c, g_pin_bytes));
+    memcpy(pin_a, page_a, g_pin_bytes);
+    memcpy(pin_b, page_b, g_pin_bytes);
 
     /* --- serial: copy/flop/copy per chunk, one at a time on the default
      * stream. This is the straightforward implementation. */
@@ -660,7 +672,7 @@ static void bench_overlap(float *page_a, float *page_b, void *dev_a,
 
     /* Confirm the straightforward serial path is correct before the pipeline
      * runs, so any later corruption is attributable to the pipeline. */
-    memcpy(page_c, pin_c, BYTES);
+    memcpy(page_c, pin_c, g_pin_bytes);
     {
         int bad = 0;
         for (int c = 0; c < NUM_CHUNKS; c++) {
@@ -757,7 +769,7 @@ static void bench_overlap(float *page_a, float *page_b, void *dev_a,
     /* Verify the pipeline still produced correct data, per chunk, so a
      * failure names the chunk range that was corrupted instead of only
      * reporting an aggregate difference. */
-    memcpy(page_c, pin_c, BYTES);
+    memcpy(page_c, pin_c, g_pin_bytes);
     {
         int bad_chunks = 0;
         for (int c = 0; c < NUM_CHUNKS; c++) {
@@ -809,12 +821,54 @@ int main(void)
     void *h2d_dst = NULL, *d2h_dst = NULL;
     float *page_a = (float *)malloc(BYTES), *page_b = (float *)malloc(BYTES),
           *page_c = (float *)malloc(BYTES);
-    CHECK(musaMallocHost(&h2d_dst, BYTES));
-    CHECK(musaMallocHost(&d2h_dst, BYTES));
 
     if (!page_a || !page_b || !page_c) {
         fprintf(stderr, "FAIL host allocation\n");
         return EXIT_FAILURE;
+    }
+
+    /* Pinned staging memory is the allocation most exposed to host memory
+     * pressure: the driver backs it with 256 KiB (order 6) compound pages, and
+     * on a fragmented host order 6 can be unavailable even with gigabytes
+     * free. Back off by halving rather than aborting the whole platform
+     * report, and say which size was used so the numbers stay interpretable.
+     * The kernel still needs 2^order contiguous pages at the reduced size. */
+    {
+        size_t pin_bytes = BYTES;
+        while (musaMallocHost(&h2d_dst, pin_bytes) != musaSuccess) {
+            musaGetLastError();
+            if (pin_bytes <= (1u << 20)) {
+                fprintf(stderr,
+                        "FAIL musaMallocHost even at %zu B (host memory or "
+                        "fragmentation exhausted)\n", pin_bytes);
+                return EXIT_FAILURE;
+            }
+            pin_bytes >>= 1;
+        }
+        /* Second buffer: if it does not fit at that size, shrink both. */
+        while (musaMallocHost(&d2h_dst, pin_bytes) != musaSuccess) {
+            musaGetLastError();
+            if (pin_bytes <= (1u << 20)) {
+                fprintf(stderr, "FAIL second pinned staging buffer\n");
+                return EXIT_FAILURE;
+            }
+            musaFreeHost(h2d_dst);
+            pin_bytes >>= 1;
+            while (musaMallocHost(&h2d_dst, pin_bytes) != musaSuccess) {
+                musaGetLastError();
+                if (pin_bytes <= (1u << 20)) {
+                    fprintf(stderr, "FAIL pinned staging buffer\n");
+                    return EXIT_FAILURE;
+                }
+                pin_bytes >>= 1;
+            }
+        }
+        if (pin_bytes != BYTES) {
+            g_pin_bytes = pin_bytes;
+            printf("NOTE pinned staging reduced to %zu MiB "
+                   "(asked %u MiB) by host memory pressure\n",
+                   pin_bytes >> 20, BYTES_MIB);
+        }
     }
     for (unsigned i = 0; i < TRIAD_FLOATS; i++) {
         page_a[i] = (float)i;
@@ -834,8 +888,8 @@ int main(void)
     /* Release the MEMBW staging buffers before the OVERLAP section allocates
      * its own. The driver backs every buffer object with page-backed host
      * memory (PhysmemNewRamBackedPMR), so keeping both sets alive at once
-     * pushes the host over the point where the driver's 16 MiB contiguous
-     * allocation starts failing with order:6 warn_alloc. */
+     * pushes the host over the point where the driver's 256 KiB (order 6)
+     * contiguous allocation starts failing with order:6 warn_alloc. */
     CHECK(musaFreeHost(h2d_dst));
     CHECK(musaFreeHost(d2h_dst));
     h2d_dst = NULL;

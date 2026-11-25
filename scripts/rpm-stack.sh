@@ -37,9 +37,9 @@ dnf_path() {
 
 expected_version() {
     case "$1" in
-        mtgpu-dkms) echo "3.1.0-14.fc$FEDORA" ;;
+        mtgpu-dkms) echo "3.1.0-15.fc$FEDORA" ;;
         mtgpu-firmware) echo "3.1.0-5.fc$FEDORA" ;;
-        musa-runtime) echo "1.5.4-6.fc$FEDORA" ;;
+        musa-runtime) echo "1.5.4-7.fc$FEDORA" ;;
         musa-sdk) echo "5.2.0-7.fc$FEDORA" ;;
         musa-toolkit) echo "3.1.0-4.fc$FEDORA" ;;
         *) return 2 ;;
@@ -54,8 +54,20 @@ installed_version() {
 # are installed, Mesa loads them for the S30 DRM card and GNOME Shell /
 # mutter segfaults in its KMS thread, leaving no login screen. A compute-only
 # host must not have them.
+#
+# Only the Mesa drivers count. The mtgpu_drv_video*.so VA-API drivers from
+# musa-runtime-va also live in /usr/lib64/dri but are opened by libva alone,
+# so they do not influence Mesa's driver selection and are safe to keep.
 display_drivers_present() {
-    ls /usr/lib64/dri/ 2>/dev/null | grep -qiE 'musa|mtgpu'
+    local f base
+    for f in /usr/lib64/dri/*; do
+        base="${f##*/}"
+        case "$base" in
+            *_drv_video*.so) continue ;;
+            *musa*|*mtgpu*) echo "$base"; return 0 ;;
+        esac
+    done
+    return 1
 }
 
 check_display_stack() {

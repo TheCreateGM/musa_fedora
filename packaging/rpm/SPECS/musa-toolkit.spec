@@ -15,6 +15,7 @@ ExclusiveArch:  x86_64
 Requires:       mtgpu-dkms = 3.1.0
 Requires:       mtgpu-firmware = 3.1.0
 Requires:       musa-runtime = 1.5.4
+Recommends:     musa-runtime-va = 1.5.4
 Requires:       musa-sdk = 5.2.0
 
 %description
@@ -25,6 +26,7 @@ S30; the current Fedora 45 driver is not load-approved:
 - mtgpu-dkms 3.1.0        kernel driver source, built through DKMS
 - mtgpu-firmware 3.1.0    GPU firmware
 - musa-runtime 1.5.4      MUSA userspace runtime and management tools
+- musa-runtime-va 1.5.4   VA-API video encode/decode driver (S30 VPU)
 - musa-sdk 5.2.0          mcc/mtxas compiler toolchain
 
 The versions are pinned to match the combination historically exercised on

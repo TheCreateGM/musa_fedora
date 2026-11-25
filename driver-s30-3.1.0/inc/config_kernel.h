@@ -52,7 +52,31 @@
 #define PVRSRV_APPHINT_HWRDEBUGDUMPLIMIT APPHNT_BLDVAR_DBGDUMPLIMIT
 #define PVRSRV_APPHINT_ENABLETRUSTEDDEVICEACECONFIG IMG_FALSE
 #define PVRSRV_APPHINT_GENERALNON4KHEAPPAGESIZE 0x4000
-#define PVRSRV_APPHINT_GENERALSVMHEAPPAGESIZE 0x40000
+/*
+ * Host backing-page size for the system (SVM) heap, in bytes.
+ *
+ * The vendor value is 0x40000 (256 KiB). The MTT S30 has no dedicated VRAM:
+ * every buffer object is backed by host RAM, so this is the granularity of
+ * EVERY musaMalloc()/musaMallocHost() call. 256 KiB is order 6, and
+ * OSAllocUserPages() must return a compound page of exactly that order for
+ * the whole BO (the caller indexes 2^order pages from the returned head and
+ * frees with the same order, so a lower-order fallback would be unsound).
+ *
+ * On a 7.4 GiB Fedora host with swap in use, order 6 is frequently
+ * unsatisfiable: /proc/buddyinfo shows 0 free order-6 blocks in both zones
+ * while order 2 still has thousands, and the kernel logs
+ * "page allocation failure: order:6, mode:0x140cc0(GFP_USER|__GFP_COMP)"
+ * before musaMallocHost() finally fails with musaErrorOutOfMemory.
+ * Reproduced on 2026-11-25: scripts/s30-perf.sh could not even allocate its
+ * five 32 MiB staging buffers.
+ *
+ * 0x4000 (16 KiB, order 2) matches PVRSRV_APPHINT_GENERALNON4KHEAPPAGESIZE,
+ * which is already the driver default for the non-4K heap and therefore an
+ * exercised code path. The cost is 16x more page-table entries and mappings
+ * per byte; the benefit is that host fragmentation no longer aborts
+ * allocations. Measured effect is in docs/host-memory-fragmentation.md.
+ */
+#define PVRSRV_APPHINT_GENERALSVMHEAPPAGESIZE 0x4000
 #define PVRSRV_APPHINT_HIGHSVMHEAPPAGESIZEBITMASK 0x45000
 #define PVRSRV_APPHINT_HWPERFCLIENTBUFFERSIZE 786432
 #define PVRSRV_APPHINT_KCCBCMDCONTINUEDTIMEOUTCOUNT 3

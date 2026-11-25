@@ -6,7 +6,7 @@
 
 Name:           musa-runtime
 Version:        1.5.4
-Release:        6%{?dist}
+Release:        7%{?dist}
 Summary:        MUSA runtime userspace for Moore Threads GPUs (MTT S30)
 
 License:        Proprietary
@@ -46,6 +46,27 @@ musa-runtime-display subpackage. On a headless compute host they must NOT be
 installed: when mtgpu is loaded, Mesa loads these drivers for the S30 DRM card
 and GNOME Shell/mutter segfaults in its KMS thread. The compute runtime,
 Vulkan ICD and test tools do not need them.
+
+%package va
+Summary:        MUSA VA-API video encode/decode driver for Moore Threads GPUs
+Requires:       %{name} = %{version}-%{release}
+
+%description va
+Vendor VA-API driver for the MTT S30 VPU (mtgpu_drv_video.so), the same
+payload the vendor deb installs under /usr/lib/x86_64-linux-gnu/dri.
+
+Install this subpackage when the S30 is to be used for hardware video
+decode/encode. It ships only the mtgpu_drv_video*.so VA drivers into
+/usr/lib64/dri and is picked up by libva ("mtgpu" driver, auto-probed).
+
+Unlike musa-runtime-display, this subpackage ships no Mesa DRI or GBM driver,
+so Mesa never selects it for GL/EGL composition. That is what makes it safe to
+install next to an i915 desktop where the vendor DRI driver crashes GNOME
+Shell; see docs/display-driver-subpackage-2026-11-23.md.
+
+The S30 VPU advertises MPEG-2, VC-1, H.264 and JPEG decode plus H.264 and
+HEVC encode entrypoints through this driver on the validated stack; the
+verified subset is recorded in docs/vaapi.md.
 
 %package display
 Summary:        MUSA Mesa DRI/GBM/Xorg display drivers for Moore Threads GPUs
@@ -192,13 +213,39 @@ sysctl --system >/dev/null 2>&1 || true
 %config(noreplace) %{_sysconfdir}/ld.so.conf.d/musa-runtime.conf
 %config(noreplace) %{_sysconfdir}/profile.d/zz-musa-fedora.sh
 
+%files va
+%defattr(-,root,root,-)
+%dir /usr/lib64/dri
+/usr/lib64/dri/mtgpu_drv_video.so
+/usr/lib64/dri/mtgpu_drv_video_1.so
+/usr/lib64/dri/mtgpu_drv_video_2.so
+/usr/lib64/dri/musa_drv_video.so
+
+# The Mesa payload is listed file by file on purpose: rpmbuild expands a bare
+# directory in %files recursively, which would make musa-runtime-display claim
+# the VA drivers that now belong to musa-runtime-va.
 %files display
 %defattr(-,root,root,-)
-/usr/lib64/dri/
+%dir /usr/lib64/dri
+/usr/lib64/dri/mtgpu_dri.so
+/usr/lib64/dri/musa_dri.so
+/usr/lib64/dri/kms_swrast_musa_dri.so
+/usr/lib64/dri/swrast_musa_dri.so
 /usr/lib64/gbm/
 /usr/lib64/xorg/
 
 %changelog
+* Wed Nov 25 2026 MUSA Fedora Team <musa@fedoraproject.org> - 1.5.4-7
+- Add the musa-runtime-va subpackage: the vendor VA-API driver
+  (mtgpu_drv_video*.so) as a separate package from musa-runtime-display.
+  VA drivers are only ever opened by libva, never by Mesa, so hardware
+  video encode/decode becomes installable on an i915 desktop without
+  reintroducing the GNOME Shell KMS crash that made the display drivers
+  opt-in. Verified on the S30 on 2026-11-25 (20 profiles, H.264 VAAPI
+  encode, no kernel fault); see docs/vaapi.md.
+- Nothing else in the payload changes: the display subpackage keeps
+  owning /usr/lib64/dri, /usr/lib64/gbm and /usr/lib64/xorg.
+
 * Tue Nov 24 2026 MUSA Fedora Team <musa@fedoraproject.org> - 1.5.4-6
 - Drop the redundant 'BuildArch: x86_64' and rely on the ExclusiveArch tag
 - the spec already carried. BuildArch would emit an x86_64 RPM from any

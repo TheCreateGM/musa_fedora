@@ -45,6 +45,7 @@ packaging/rpm/RPMS/
 packaging/rpm/SRPMS/
 packaging/rpm/local-build/
 packaging/rpm/local-build-dkms/
+packaging/rpm/local-build-va/
 packaging/rpm/work/
 
 # The generated source tarballs are rebuilt from the vendor debs by

@@ -12,7 +12,7 @@
 
 Name:           mtgpu-dkms
 Version:        3.1.0
-Release:        13%{?dist}
+Release:        14%{?dist}
 Summary:        DKMS kernel driver source for Moore Threads GPUs (mtgpu)
 
 License:        GPL-2.0-only
@@ -175,13 +175,22 @@ fi
 depmod -a >/dev/null 2>&1 || :
 
 %changelog
+* Wed Nov 25 2026 MUSA Fedora Team <musa@fedoraproject.org> - 3.1.0-14
+- Add an objtool wrapper (scripts/objtool-safe.sh) and pass it to kbuild so
+  out-of-tree module builds do not fail when a Fedora kernel-devel objtool is
+  present but cannot start because its binutils SONAME is no longer installed
+  (observed on rawhide 7.4.0-0.rc3 kernel-devel). When objtool runs normally,
+  the wrapper execs it unchanged; when objtool cannot start, it logs a loud
+  warning and exits 0 so the module still links. Modules linked without objtool
+  lack ORC unwind metadata for their own code, but load and run.
+
 * Tue Nov 24 2026 MUSA Fedora Team <musa@fedoraproject.org> - 3.1.0-13
 - Ship the rm_feature_level rationale in 90-mtgpu-headless.conf. The option
   itself has been absent since 3.1.0-10, but only as a comment-less change, so
   every host carried a `%config(noreplace)` local edit whose content differed
   from the packaged file for a reason the file did not state (rpm -V flagged it
   as S.5....T, and a stale .rpmnew accumulated). No option value changes: the
-  file is now byte-identical to the validated 2026-11-24 host file.
+  file is now byte-identical to the validated 2026-11-24 host file. [ਸ਼
 
 * Mon Nov 23 2026 MUSA Fedora Team <musa@fedoraproject.org> - 3.1.0-12
 - Ship a tmpfiles.d entry creating /var/log/mtgpu and /var/log/mtgpu/event_report,

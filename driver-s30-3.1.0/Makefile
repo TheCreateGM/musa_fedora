@@ -4,6 +4,17 @@ ARCH ?= x86_64
 KERNELDIR ?= /lib/modules/${KERNELVER}/build
 KERNELSRC ?= /lib/modules/${KERNELVER}/source
 
+# ---- objtool wrapper (Fedora port) -----------------------------------------
+# kbuild runs objtool on module objects/links when CONFIG_OBJTOOL is set. On
+# Fedora (rawhide especially) kernel-devel can ship an objtool linked against
+# a binutils snapshot SONAME the distro no longer carries, which breaks every
+# out-of-tree module build at the objtool step. Hand kbuild the wrapper, which
+# runs the real objtool unchanged when it can start and links without objtool
+# (with a loud warning) when it cannot. See scripts/objtool-safe.sh.
+MTGPU_REAL_OBJTOOL ?= $(KERNELDIR)/tools/objtool/objtool
+export MTGPU_REAL_OBJTOOL
+KBUILD_OBJTOOL := objtool="$(OBJ_DIR)/scripts/objtool-safe.sh"
+
 ifneq ($(wildcard $(KERNELSRC)),)
 	ccflags-y += -I$(KERNELSRC)
 	ccflags-$(CONFIG_X86) += -include $(KERNELSRC)/arch/x86/include/asm/cpufeatures.h
@@ -122,7 +133,7 @@ CONFTEST := $(OBJ_DIR)/conftest
 MTGPU_BINARY := $(OBJ_DIR)/objs/$(ARCH)/mtgpu_core.o_binary
 
 all: $(CONFTEST_H) $(MTGPU_ION_O)
-	$(MAKE) -C $(KERNELDIR)   M=$(OBJ_DIR) modules
+	$(MAKE) -C $(KERNELDIR)   M=$(OBJ_DIR) modules $(KBUILD_OBJTOOL)
 	@echo "make all end"
 
 # Use Kbuild bookkeeping for the precompiled vendor object. Modern modpost
@@ -138,7 +149,7 @@ $(CONFTEST_H): $(CONFTEST)
 	@ln -sf $(OBJ_DIR)/conftest.h $@
 
 $(MTGPU_ION_O):
-	$(MAKE) -C $(KERNELDIR)   M=$(MTGPU_ION_DIR) modules
+	$(MAKE) -C $(KERNELDIR)   M=$(MTGPU_ION_DIR) modules $(KBUILD_OBJTOOL)
 	@cp $(MTGPU_ION_DIR)/Module.symvers  $(MTGPU_ION_DIR)/mt_ion.ko $(PWD)
 
 clean:

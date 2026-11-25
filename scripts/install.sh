@@ -80,7 +80,7 @@ show_plan() {
     echo
     echo "Build/package command: TMPDIR=/var/tmp packaging/rpm/build-all.sh"
     echo "Install command: scripts/install.sh --install"
-    echo "The package helper verifies the exact five RPM versions and their digests."
+    echo "The package helper verifies the exact six RPM versions and their digests."
     echo "It backs up existing module/config files under /var/backups/musa-fedora,"
     echo "uses pkexec with DNF, and refuses if mtgpu is loaded."
     echo "It does not load/unload/rebind a module or edit boot arguments."

@@ -6,7 +6,10 @@ ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 RPM_DIR="${RPM_DIR:-$ROOT/packaging/rpm/local-build/RPMS}"
 KVER="$(uname -r)"
 FEDORA="$(rpm -E '%{fedora}')"
-PACKAGES=(mtgpu-dkms mtgpu-firmware musa-runtime musa-sdk musa-toolkit)
+# musa-runtime-display is deliberately not part of the pinned set: its vendor
+# Mesa drivers crash GNOME Shell on this host. The VA driver is safe and is
+# included so a removal leaves no orphaned package behind.
+PACKAGES=(mtgpu-dkms mtgpu-firmware musa-runtime musa-runtime-va musa-sdk musa-toolkit)
 SELECTED_RPMS=()
 ASSUME_YES=0
 
@@ -40,8 +43,9 @@ expected_version() {
         mtgpu-dkms) echo "3.1.0-15.fc$FEDORA" ;;
         mtgpu-firmware) echo "3.1.0-5.fc$FEDORA" ;;
         musa-runtime) echo "1.5.4-7.fc$FEDORA" ;;
+        musa-runtime-va) echo "1.5.4-7.fc$FEDORA" ;;
         musa-sdk) echo "5.2.0-7.fc$FEDORA" ;;
-        musa-toolkit) echo "3.1.0-4.fc$FEDORA" ;;
+        musa-toolkit) echo "3.1.0-5.fc$FEDORA" ;;
         *) return 2 ;;
     esac
 }

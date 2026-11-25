@@ -2,7 +2,7 @@
 
 Name:           musa-toolkit
 Version:        3.1.0
-Release:        4%{?dist}
+Release:        5%{?dist}
 Summary:        Complete MUSA stack for Moore Threads GPUs (MTT S30)
 
 License:        Proprietary
@@ -20,8 +20,8 @@ Requires:       musa-sdk = 5.2.0
 
 %description
 The MUSA Toolkit metapackage pulls in the MUSA stack package set for Moore
-Threads GPUs. This package combination was historically exercised on an MTT
-S30; the current Fedora 45 driver is not load-approved:
+Threads GPUs. This combination is validated on the MTT S30 under Fedora 45
+(kernel 7.3.4):
 
 - mtgpu-dkms 3.1.0        kernel driver source, built through DKMS
 - mtgpu-firmware 3.1.0    GPU firmware
@@ -29,12 +29,14 @@ S30; the current Fedora 45 driver is not load-approved:
 - musa-runtime-va 1.5.4   VA-API video encode/decode driver (S30 VPU)
 - musa-sdk 5.2.0          mcc/mtxas compiler toolchain
 
-The versions are pinned to match the combination historically exercised on
-real MTT S30 hardware on Fedora Linux (kernel 7.3.3). The latest package
-builds and current hardware limitations are documented in the project status
-report; successful builds do not establish safe driver loading.
+The versions are pinned to the combination exercised on real MTT S30 hardware.
+Driver, runtime, compiler and VA-API paths are verified on that hardware; the
+verified feature boundary is documented in docs/limitations.md. Keep the
+desktop on the integrated GPU: do not install musa-runtime-display next to a
+GNOME session, because the vendor Mesa driver crashes GNOME Shell on this host.
 
-The GPU must be visible for the runtime to work. An IOMMU must be enabled
+On a host with compute mode enabled, udev binds the S30 to mtgpu on a normal
+boot. The GPU must be visible for the runtime to work. An IOMMU must be enabled
 (intel_iommu=on iommu=pt on Intel platforms); see docs/install.md, and
 docs/troubleshooting.md if musaInfo reports a platform error.
 

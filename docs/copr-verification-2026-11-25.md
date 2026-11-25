@@ -65,6 +65,20 @@ each chroot's published `repodata` via `dnf repoquery` for the artifacts users
 actually receive. "Build succeeded" alone would not prove the repository serves
 the right versions; this does.
 
+Cross-release resolution was also checked in fresh containers, with only the
+published repository enabled and `install_weak_deps=False`:
+
+| Container | Resolved `musa-toolkit` | Pulls |
+|---|---|---|
+| Fedora 44 (`musa-fedora`) | 3.1.0-5.fc44 | dkms 3.1.0-15, firmware 3.1.0-5, runtime 1.5.4-7, sdk 5.2.0-7 |
+| Fedora 43 (`musa-mtt-s30`) | 3.1.0-5.fc43 | dkms 3.1.0-15, firmware 3.1.0-5, runtime 1.5.4-7, sdk 5.2.0-7 |
+
+The full payload install was not completed in these two containers: COPR
+throughput dropped to single-digit KiB/s, and the SDK is 1 GiB. The full install
+and GPU run were done on Fedora 45 with the locally built RPMs. Resolution
+proves the dependency chain and versions; the Fedora 45 run proves installation
+and execution.
+
 ## Reproducing the submission
 
 `copr-cli build` and a direct multipart POST to `/api_3/build/create/upload`

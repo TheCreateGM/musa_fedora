@@ -16,6 +16,17 @@ For the repair of the installed system's disk boot (GDM crash caused by the
 old base package shipping vendor Mesa DRI drivers), see
 [the 2026-11-23 boot fix](docs/boot-fix-2026-11-23.md).
 
+### Updates — 2026-11-26 (session: same-boot re-verify)
+
+- **All gates re-passed on the live host:** `verify-musa.sh --skip-memcpy`
+  **15/0/2**, `s30-perf.sh` **PASS** (6.4 GB/s pinned, 2.6–2.7 µs/launch,
+  52.1 GB/s triad), `test-vaapi.sh` **14/0/0**, `check-musa-env.sh`
+  **PASS**, `verify-copr-chroots.sh` **20/20**, and isolated podman
+  install **13/0** — zero mtgpu kernel faults in the journal. One perf
+  run flaked its bandwidth check under memory pressure (6.2G/7.4G used)
+  and passed on retry with no code change. Full evidence:
+  [hardware-validation-2026-11-26-session3](docs/hardware-validation-2026-11-26-session3.md).
+
 ### Updates — 2026-11-26 (session: cold-boot re-verification)
 
 - **Independent cold boot re-validated the whole stack.** After a fresh

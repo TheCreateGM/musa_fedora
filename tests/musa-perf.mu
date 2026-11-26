@@ -393,14 +393,27 @@ static void *bench_amplify(float *ha, float *hb, float *hc, void *da, void *db,
     CHECK(musaEventCreate(&e0));
     CHECK(musaEventCreate(&e1));
 
-    /* A: one launch covering the whole array. */
-    CHECK(musaEventRecord(e0, NULL));
-    triad<<<full_grid, bd>>>((const float *)da, (const float *)db,
-                             (float *)dc, n);
-    CHECK(musaGetLastError());
-    CHECK(musaEventRecord(e1, NULL));
-    CHECK(musaEventSynchronize(e1));
-    CHECK(musaEventElapsedTime(&ms_one, e0, e1));
+    /* A: one launch covering the whole array. Measured with the same
+     * best-of-TIME_ITERS method as the split and persistent cases below:
+     * taking a lone sample here would catch the GPU before its clocks ramp
+     * (DVFS) while the split cases report their warmest iteration, making
+     * an unfair comparison where splitting looks artificially faster. */
+    {
+        float best = 1e30f;
+        for (int rep = 0; rep < TIME_ITERS; rep++) {
+            float m = 0.0f;
+            CHECK(musaEventRecord(e0, NULL));
+            triad<<<full_grid, bd>>>((const float *)da, (const float *)db,
+                                     (float *)dc, n);
+            CHECK(musaGetLastError());
+            CHECK(musaEventRecord(e1, NULL));
+            CHECK(musaEventSynchronize(e1));
+            CHECK(musaEventElapsedTime(&m, e0, e1));
+            if (m < best)
+                best = m;
+        }
+        ms_one = best;
+    }
 
     /* B: the identical total work split across 64 launches (what an
      * unfused/inner-loop-per-chunk application does). */

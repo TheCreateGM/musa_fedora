@@ -16,6 +16,21 @@ For the repair of the installed system's disk boot (GDM crash caused by the
 old base package shipping vendor Mesa DRI drivers), see
 [the 2026-11-23 boot fix](docs/boot-fix-2026-11-23.md).
 
+### Updates — 2026-11-26 (session: perf AMPLIFY flake fixed)
+
+- **`s30-perf.sh` AMPLIFY flake root-caused and fixed.** The suite sometimes
+  reported `PERF_STATUS: FAIL` on `splitting work was faster than a single
+  launch` (negative amplification cost). The cause was a measurement bug, not
+  the GPU: `bench_amplify` took a **single** sample for the one-launch case but
+  `best of 10` for the 64-launch and persistent cases, so the lone sample
+  caught cold DVFS clocks while the split cases reported their warmest
+  iteration. Fix: measure the one-launch case with the same `best of 10`
+  method — no pass criterion weakened. Verified across three consecutive runs
+  (one launch 1.98 ms beats 64 launches 2.33 ms every time, amplification cost
+  `+345 us`, `PERF_STATUS: PASS`), `verify-musa.sh --skip-memcpy` still
+  **15/0/2**, zero mtgpu faults. Details:
+  [root-cause-perf-amplify-flake-2026-11-26](docs/root-cause-perf-amplify-flake-2026-11-26.md).
+
 ### Updates — 2026-11-26 (session: same-boot re-verify)
 
 - **All gates re-passed on the live host:** `verify-musa.sh --skip-memcpy`

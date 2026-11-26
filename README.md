@@ -88,8 +88,20 @@ old base package shipping vendor Mesa DRI drivers), see
   default driver path is the Debian `/usr/lib/x86_64-linux-gnu/dri`, which
   does not exist on Fedora, so a MUVID application found no VA driver at
   all.
+- **`musa-runtime` 1.5.4-8 is built, published and installed.** It exports
+  `LIBVA_DRIVERS_PATH=/usr/lib64/dri` from the profile snippet, so the
+  MUVID video API finds the packaged VA driver instead of searching the
+  Debian path that does not exist on Fedora. Published to both COPR
+  projects ([11392496](https://copr.fedorainfracloud.org/coprs/build/11392496/),
+  [11392497](https://copr.fedorainfracloud.org/coprs/build/11392497/)) and
+  built for all 9 chroots; all 22 build logs were downloaded and contain
+  **zero** real errors. On the host: `rpm -V` and `dnf check` clean,
+  `verify-musa.sh --skip-memcpy` **15/0/2**, `test-vaapi.sh` **14/0/0**,
+  `check-musa-env.sh` **PASS**. See
+  [COPR verification](docs/copr-verification-2026-11-26.md).
 - No regression: `scripts/verify-musa.sh --skip-memcpy` still reports
-  **15 passed, 0 failed, 2 skipped** (up from 13 by the two new guards), `mthreads-gmi` still reports the S30,
+  **15 passed, 0 failed, 2 skipped** (up from 13 by the two new guards),
+  `mthreads-gmi` still reports the S30,
   `h264_vaapi` encode still produces a valid stream, and the kernel log
   contains **zero** `BUG`/`Oops`/general-protection/invalid-opcode entries
   for the whole session.
@@ -329,7 +341,7 @@ the capped test scope allows; OpenCL is absent). The table below records the
 | MUSA driver-API SONAME hygiene | **fixed 2026-11-26** | unowned 5.2.0 `/usr/lib64/libmusa.so.1` quarantined; `verify-musa.sh` now guards against a re-introduction |
 | Headless Vulkan | **verified, limited** | S30 device/queue, buffer allocation, and host-visible memory map passed; no rendering test |
 | Moore Threads OpenCL | **unavailable** | No MT ICD in the default loader; archived 2.1.1 ICD compute probe caused a kernel Oops (do not use) |
-| Copr publication | **verified 2026-11-25 (late)** | 9/9 chroots across both projects each publish all seven artifacts at dkms 3.1.0-16, firmware 3.1.0-5, runtime 1.5.4-7 (+va/display), sdk 5.2.0-7, toolkit 3.1.0-6; `scripts/verify-copr-chroots.sh` reports 20/20 checks and all 18 per-chroot build logs of the last submission were inspected with 0 errors — see [COPR verification](docs/copr-verification-2026-11-25.md) and [objtool fallback](docs/objtool-fallback-2026-11-25.md); build success does not qualify driver loading |
+| Copr publication | **verified 2026-11-26** | 9/9 chroots across both projects each publish all seven artifacts at dkms 3.1.0-16, firmware 3.1.0-5, **runtime family 1.5.4-8**, sdk 5.2.0-7, toolkit 3.1.0-6; `scripts/verify-copr-chroots.sh` reports 20/20 checks and all 22 build logs of the runtime-1.5.4-8 submission were inspected with 0 errors — see [COPR verification](docs/copr-verification-2026-11-26.md), [the 11-25 one](docs/copr-verification-2026-11-25.md) and [objtool fallback](docs/objtool-fallback-2026-11-25.md); build success does not qualify driver loading |
 | Driver rebuild from source | **verified 2026-11-23** | `scripts/build-kernel-driver.sh` rebuilds `mtgpu` for `7.3.4-300.fc45.x86_64`; vermagic matches and the module aliases equal the installed module's |
 | Fedora 45 container + GPU test (2026-11-25 set) | **verified** | all seven RPMs installed in a throwaway Fedora 45 container with scriptlets disabled; `musaInfo`, vendor `muMemcpyTest` (1 GiB), `musart-smoke`, and an `mcc` `mp_10` vector-add ran on the S30: `13 passed, 0 failed` |
 | Historical Fedora container + GPU test (2026-11-17) | **verified** | the five-RPM set installed in a throwaway container and its packaged runtime and `mcc` ran on the S30: `13 passed, 0 failed` |

@@ -226,6 +226,41 @@ picked up) and one from 01:20 (the deliberate 5.2.0-API experiment of
 * headless Vulkan → device, buffer, host-visible map all PASS
 * **zero** kernel faults, **zero** page-allocation failures
 
+## 5. Package upgrade and post-upgrade re-verification
+
+`musa-runtime` and `musa-runtime-va` were upgraded from 1.5.4-7 to
+1.5.4-8, the release that exports `LIBVA_DRIVERS_PATH=/usr/lib64/dri` so
+MUVID can find the packaged VA driver. The only payload difference is the
+profile snippet; see [COPR verification](copr-verification-2026-11-26.md).
+
+```
+$ rpm -q musa-runtime musa-runtime-va
+musa-runtime-1.5.4-8.fc45.x86_64
+musa-runtime-va-1.5.4-8.fc45.x86_64
+$ rpm -V musa-runtime musa-runtime-va     # clean
+$ dnf check                                 # clean
+```
+
+| Check | Result |
+|---|---|
+| `scripts/verify-musa.sh --skip-memcpy` | **15 passed, 0 failed, 2 skipped** |
+| `scripts/hardware/test-vaapi.sh` | **14 passed, 0 failed, 0 skipped** |
+| `scripts/check-musa-env.sh` | `MUSA_ENV_STATUS: PASS` |
+| login shell `LIBVA_DRIVERS_PATH` | `/usr/lib64/dri` (was unset before) |
+
+The fix in action, from a login shell:
+
+```
+$ bash -lc 'echo $LIBVA_DRIVERS_PATH'
+/usr/lib64/dri
+$ ls /usr/lib64/dri/mtgpu_drv_video*.so
+mtgpu_drv_video_1.so  mtgpu_drv_video_2.so  mtgpu_drv_video.so
+```
+
+The MUVID probe in that shell now loads the VA driver successfully; the
+remaining failure is the codec-id limitation of the 1.5.4 runtime
+(`MUSA_ERROR_NOT_SUPPORTED`), which is a separate, already-diagnosed issue.
+
 ## Verdict
 
 Hardware video **decode** on the MTT S30 is **not working**, on any of the

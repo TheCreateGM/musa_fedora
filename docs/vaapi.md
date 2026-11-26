@@ -77,13 +77,65 @@ Verified:
 
 Not verified:
 
-- hardware **decode** was not exercised end to end. The VLD profiles are
-  advertised by the driver, but this test does not feed a real elementary
-  stream through `VAProfileH264High` decode. Advertised capability is not
-  proof of a working decode pipeline.
+- hardware **decode** does not work on this host. It was exercised end to
+  end on 2026-11-26 with `scripts/hardware/test-video-decode.sh` and fails
+  inside the vendor driver, not in the test. The newest driver build
+  cannot allocate its VPU working buffers (`mos_bo_alloc DEC_MV` →
+  `M3d::CreateGpuMemory -9`); the older build rejects the picture
+  (`VpuApiDecPic: slices number was wrong!`). The full analysis, including
+  the libva 2.24 API breakage any client hits, is in
+  [root-cause-video-decode-2026-11-26](root-cause-video-decode-2026-11-26.md).
 - VP9/HEVC/AV1 encode, transcoding, and multi-stream sessions were not
   exercised.
 - Display/GL paths are out of scope; this subpackage contains no Mesa driver.
+
+## Hardware decode status (2026-11-26)
+
+```
+$ scripts/hardware/test-video-decode.sh
+```
+
+Two independent decode routes are driven by that script; neither completes
+a picture on this host:
+
+```
+== VA-API route (libva VAEntrypointVLD) ==
+VADECODE_FAIL render -> 2 (resource allocation failed)
+Failed M3d::CreateGpuMemory -9
+[LIBVA]:CRITICAL - mos_gem_bo_alloc_internal:198: fail to create m3d bo
+[LIBVA]:CRITICAL - VpuApiDecSeqInit:1549: Error mos_bo_alloc DEC_MV
+[LIBVA]:CRITICAL - DdiDecode_EndPicture:2008: Seq init failed.
+--- older-build ---
+VADECODE_FAIL render -> 18 (invalid parameter)
+[LIBVA]:CRITICAL - VpuApiDecPic:1708: slices number was wrong! please check.
+[LIBVA]:CRITICAL - DdiDecode_EndPicture:1916: Dec frame failed.
+
+== MUSA MUVID route (libvideo_musa.so) ==
+MUVID_FAIL muvidCreateVideoParser -> 801
+```
+
+The MUSA-native route fails earlier still, for a different reason: the
+runtime in `musa-runtime` 1.5.4 accepts only codec ids 0..3 and answers
+`MUSA_ERROR_NOT_SUPPORTED` (801) for the id 4 that the vendor Video Codec
+SDK headers use for H.264.
+
+The MUSA-native route fails earlier still, for a different reason: the
+runtime in `musa-runtime` 1.5.4 accepts only codec ids 0..3 and answers
+`MUSA_ERROR_NOT_SUPPORTED` (801) for the id 4 that the vendor Video Codec
+SDK headers use for H.264.
+
+The upstream Video Codec SDK library (`libvideo_musa.so.13.0`) *does*
+implement H.264 — dispatching on codec ids 0..3, 4, 8, 10 and 11 — and
+reports this GPU as `h264_420 supported=1 mtdECs=1`, i.e. **the hardware
+decode engine is present and correctly advertised**. It cannot be used
+here because it belongs to the MUSA 5.x generation, and the MUSA 5.x driver
+API is rejected by the installed mtgpu 3.1.0 kernel driver
+(`MTGPU_QUERY_CMD_MKT_NAME`, sub-command 12 → `muInit` fails with -22).
+
+Practical consequence: **on Fedora the S30 can encode video in hardware but
+cannot decode it in hardware.** `h264_vaapi` encode is the working half,
+and the missing piece is a newer S30 kernel driver rather than missing
+hardware.
 
 ## Requirements
 

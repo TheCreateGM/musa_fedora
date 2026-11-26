@@ -21,7 +21,7 @@ old base package shipping vendor Mesa DRI drivers), see
 - **Independent cold boot re-validated the whole stack.** After a fresh
   reboot (2026-11-26 00:07 UTC) with no blacklist, udev auto-bound `mtgpu`
   on the S30 and every gate reproduced: `verify-musa.sh --skip-memcpy`
-  **13/0/2**, `s30-perf.sh` **PERF_STATUS: PASS** (6.3/6.5 GB/s pinned,
+  **13/0/2** at that time (**15/0/2** after the 2026-11-26 SONAME guards), `s30-perf.sh` **PERF_STATUS: PASS** (6.3/6.5 GB/s pinned,
   2.7 µs/launch, 52.0 GB/s triad, 1.12× pipeline), `test-vaapi.sh`
   **14/0/0**, `check-musa-env.sh` **PASS**, `verify-copr-chroots.sh`
   **20/20** — zero mtgpu kernel faults and zero page-allocation failures in
@@ -36,6 +36,63 @@ old base package shipping vendor Mesa DRI drivers), see
   after its designed one-shot run; reinstalled via
   `pkexec scripts/install-boot-verify.sh install` so the next reboot writes
   compute-mode boot evidence to `/var/log/musa-fedora/`.
+
+### Updates — 2026-11-26 (video decode and SONAME session)
+
+- **Hardware video decode was exercised and does not work on this host, on
+  either vendor route.** The new `scripts/hardware/test-video-decode.sh`
+  drives the VA-API `VAEntrypointVLD` path and the MUSA-native MUVID path
+  and reports precisely where each one stops. The packaged VA driver build
+  cannot allocate its VPU working buffers (`mos_bo_alloc DEC_MV` →
+  `M3d::CreateGpuMemory -9`); the older driver build rejects the valid
+  single-access-unit stream (`VpuApiDecPic: slices number was wrong!`); and
+  `musa-runtime` 1.5.4's MUVID accepts only codec ids 0..3 and rejects the
+  id 4 that the vendor Video Codec SDK headers use for H.264
+  (`MUSA_ERROR_NOT_SUPPORTED`). The S30 still **encodes** video in
+  hardware (`h264_vaapi`). Full evidence chain:
+  [root-cause-video-decode-2026-11-26](docs/root-cause-video-decode-2026-11-26.md).
+- **The blocked ingredient is identified, and it is not the hardware.** The
+  upstream Video Codec SDK library `libvideo_musa.so.13.0` *does* implement
+  the H.264 codec id (its `muvidCreateVideoParser` dispatches on ids 0..3,
+  4, 8, 10, 11) and reports this GPU as `h264_420 supported=1 mtdECs=1` —
+  one MT decode engine, correctly advertised. It cannot be used here
+  because it is a MUSA 5.x library: the MUSA 5.x driver API issues
+  `MTGPU_QUERY_CMD_MKT_NAME` (sub-command 12), which the only S30 kernel
+  driver available (mtgpu 3.1.0) does not implement, so `muInit` fails
+  with -22. **A Moore Threads S30 kernel driver that implements
+  `MTGPU_QUERY_CMD_MKT_NAME` is the single prerequisite that would unblock
+  MUSA-native hardware decode.** The upstream comparison is reproducible
+  with `MUSA_UPSTREAM_MUVID_LIB=<path to libvideo_musa.so.13.0>
+  scripts/hardware/test-video-decode.sh`.
+- **libva 2.24 broke the decode API for every client.**
+  `vaCreateBuffer()` gained a `VAContextID` argument, so a libva-1.x caller
+  silently passes its *buffer type* where the driver expects a context id
+  (`Invalid context: 0x1`); the decode slice-data buffer type is
+  `VASliceDataBufferType = 5`; and `vaQueryConfigAttributes()` /
+  `vaGetConfigAttributes()` now take `VAProfile *` / `VAEntrypoint *`.
+  `tests/vadecode.c` uses the 2.24 signatures.
+- **A packaging defect was found and fixed.** An unowned 5.2.0 leftover in
+  `/usr/lib64` (`libmusa.so.1` → `libmusa.so.5.2.0`) was the only provider
+  of the SONAME `libmusa.so.1` on the host. Every consumer of that name
+  therefore got the 5.2.0 driver API, which asks the 3.1.0 kernel driver
+  for the non-existent `MTGPU_QUERY_CMD_MKT_NAME` (12) and dies in
+  `muInit()` with `-22` while the kernel logs `Invalid cmd_type: 1 or
+  cmd: 12`. The four files were moved (never deleted) to
+  `/var/lib/musa-fedora/quarantine/musa-5.2-driver-api/` and `ldconfig` was
+  re-run; the packaged stack is versioned consistently (`libmusa.so.1.5`)
+  and is unaffected. The remediation is reproducible and reversible with
+  `pkexec scripts/quarantine-5.2-driver-api.sh [--restore]`, and
+  `scripts/verify-musa.sh` now names any foreign provider of that SONAME.
+- **`musa-runtime` 1.5.4-8 exports `LIBVA_DRIVERS_PATH=/usr/lib64/dri`.**
+  `libvideo_musa.so` (the MUVID API) is a libva client whose built-in
+  default driver path is the Debian `/usr/lib/x86_64-linux-gnu/dri`, which
+  does not exist on Fedora, so a MUVID application found no VA driver at
+  all.
+- No regression: `scripts/verify-musa.sh --skip-memcpy` still reports
+  **15 passed, 0 failed, 2 skipped** (up from 13 by the two new guards), `mthreads-gmi` still reports the S30,
+  `h264_vaapi` encode still produces a valid stream, and the kernel log
+  contains **zero** `BUG`/`Oops`/general-protection/invalid-opcode entries
+  for the whole session.
 
 ### Updates — 2026-11-25 (later session: objtool fallback, 3.1.0-16)
 
@@ -111,9 +168,11 @@ old base package shipping vendor Mesa DRI drivers), see
   `h264_vaapi` encode whose 425 503-byte stream decodes cleanly. See
   [VA-API](docs/vaapi.md).
 - **Baseline suite on the patched stack:** `scripts/verify-musa.sh
-  --skip-memcpy` reports **13 passed, 0 failed, 2 skipped** (vendor memcpy
+  --skip-memcpy` reports **15 passed, 0 failed, 2 skipped** (vendor memcpy
   skipped for host RAM, OpenCL absent), with driver, runtime, `mcc`,
-  `mp_10` compute, FP64 and headless Vulkan all passing.
+  `mp_10` compute, FP64 and headless Vulkan all passing. The count rose
+  from 13 to 15 on 2026-11-26 when the SONAME-hygiene and VA-driver-path
+  guards were added.
 - **Performance benchmark:** 6.4/6.4 GB/s pinned H2D/D2H, 2.8 µs/launch,
   52.0 GB/s triad at `blockDim=1024`, 1.11× two-stream pipeline — inside the
   ranges recorded before the heap-page change, so the fix costs no bandwidth.
@@ -264,6 +323,10 @@ the capped test scope allows; OpenCL is absent). The table below records the
 | MUSA compute operations | **verified** | SAXPY, shared reduction, atomics, constant memory, device math, 2D launch, D2D copy, and FP64 passed |
 | Host-memory allocation (SVM heap 16 KiB) | **verified 2026-11-25** | 3.1.0-15 fixed the order-6 heap page; alloc latency p50 0.064 ms, zero `warn_alloc`, benchmark PASS |
 | VA-API on the S30 VPU | **verified 2026-11-25** | `musa-runtime-va` 1.5.4-7; vaInitialize, 20 profiles, H.264 encode round trip (14/0/0) |
+| Hardware video decode (VA-API VLD) | **broken 2026-11-26** | exercised via `scripts/hardware/test-video-decode.sh`; the packaged driver build fails `mos_bo_alloc DEC_MV`, the older build rejects the picture — [root cause](docs/root-cause-video-decode-2026-11-26.md) |
+| MUSA-native MUVID hardware decode | **unavailable** | `musa-runtime` 1.5.4 accepts only codec ids 0..3 and rejects the vendor headers' H.264 id 4 with `MUSA_ERROR_NOT_SUPPORTED`; the upstream SDK library implements H.264 but needs a newer S30 kernel driver |
+| MT decode engine present on the S30 | **verified 2026-11-26** | upstream Video Codec SDK reports `h264_420 supported=1 mtdECs=1` for this GPU |
+| MUSA driver-API SONAME hygiene | **fixed 2026-11-26** | unowned 5.2.0 `/usr/lib64/libmusa.so.1` quarantined; `verify-musa.sh` now guards against a re-introduction |
 | Headless Vulkan | **verified, limited** | S30 device/queue, buffer allocation, and host-visible memory map passed; no rendering test |
 | Moore Threads OpenCL | **unavailable** | No MT ICD in the default loader; archived 2.1.1 ICD compute probe caused a kernel Oops (do not use) |
 | Copr publication | **verified 2026-11-25 (late)** | 9/9 chroots across both projects each publish all seven artifacts at dkms 3.1.0-16, firmware 3.1.0-5, runtime 1.5.4-7 (+va/display), sdk 5.2.0-7, toolkit 3.1.0-6; `scripts/verify-copr-chroots.sh` reports 20/20 checks and all 18 per-chroot build logs of the last submission were inspected with 0 errors — see [COPR verification](docs/copr-verification-2026-11-25.md) and [objtool fallback](docs/objtool-fallback-2026-11-25.md); build success does not qualify driver loading |

@@ -90,6 +90,40 @@ else
     skip "packaged libdrm_mtgpu.so.1.0.0 not installed"
 fi
 
+hdr "MUSA runtime library (SONAME hygiene)"
+# The packaged runtime ships the driver API as SONAME libmusa.so.1.5. A
+# 5.2.0 leftover in /usr/lib64 answers to SONAME libmusa.so.1 and speaks a
+# 5.2 UAPI: it asks the kernel driver for MTGPU_QUERY_CMD_MKT_NAME (12),
+# which mtgpu 3.1.0 rejects, so every consumer of that SONAME dies in
+# muInit() with -22 and the kernel logs "Invalid cmd_type: 1 or cmd: 12".
+# Name the culprit instead of letting the failure surface as an abort.
+MUSA_LINK=/usr/lib64/libmusa.so.1
+if [[ -e "$MUSA_LINK" ]]; then
+    musa_target=$(readlink "$MUSA_LINK" 2>/dev/null || true)
+    if [[ "$musa_target" == "libmusa.so.1.5" ]]; then
+        ok "libmusa.so.1 resolves to the packaged runtime library"
+    else
+        bad "libmusa.so.1 -> ${musa_target:-missing} (expected libmusa.so.1.5)"
+        info "a foreign library advertises SONAME libmusa.so.1:"
+        for cand in /usr/lib64/*.so* /lib64/*.so* /usr/local/musa*/lib/*.so*; do
+            [[ -f "$cand" ]] || continue
+            if objdump -p "$cand" 2>/dev/null | grep -q 'SONAME.*libmusa\.so\.1$'; then
+                info "  $cand"
+            fi
+        done
+        info "quarantine it with: pkexec scripts/quarantine-5.2-driver-api.sh"
+    fi
+else
+    ok "no foreign provider of SONAME libmusa.so.1 in the linker path"
+    info "packaged runtime provides libmusa.so.1.5 (never libmusa.so.1)"
+fi
+# libvideo_musa.so (the MUVID video API) is a libva client whose built-in
+# default driver path is the Debian /usr/lib/x86_64-linux-gnu/dri.
+if compgen -G "/usr/lib64/dri/mtgpu_drv_video.so" >/dev/null; then
+    ok "VA driver present at /usr/lib64/dri (MUVID needs LIBVA_DRIVERS_PATH)"
+    info "the packaged profile.d sets LIBVA_DRIVERS_PATH=/usr/lib64/dri"
+fi
+
 hdr "Vendor management tool (mthreads-gmi)"
 GMI_BIN=""
 for candidate in /usr/bin/mthreads-gmi /usr/local/musa/bin/mthreads-gmi; do

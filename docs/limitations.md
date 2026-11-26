@@ -47,9 +47,25 @@ enough host memory is free.
 ## Not verified or not supported
 
 - **Hardware video decode** is advertised by the driver (`VAEntrypointVLD`
-  profiles for H.264, HEVC, VP9, AV1, VC-1, MPEG-2, JPEG, VP8) but was not
-  exercised end to end. Advertised capability is not proof of a working decode
-  pipeline; only encode was measured.
+  profiles for H.264, HEVC, VP9, AV1, VC-1, MPEG-2, JPEG, VP8) but **does
+  not work on this host**. It was exercised end to end on 2026-11-26 with
+  `scripts/hardware/test-video-decode.sh`: the packaged driver build cannot
+  allocate its VPU working buffers (`mos_bo_alloc DEC_MV` →
+  `M3d::CreateGpuMemory -9`), the older build rejects the picture
+  (`VpuApiDecPic: slices number was wrong!`), and the MUSA-native MUVID
+  route in `musa-runtime` 1.5.4 rejects the H.264 codec id outright
+  (`MUSA_ERROR_NOT_SUPPORTED`). The S30 encodes video in hardware
+  (`h264_vaapi`) but does not decode it here.
+
+  The hardware decoder itself **is** present: the upstream Video Codec SDK
+  library reports `h264_420 supported=1 mtdECs=1` for this GPU. What blocks
+  it is the userspace chain above the driver — that library needs the MUSA
+  5.x driver API, and the MUSA 5.x API issues `MTGPU_QUERY_CMD_MKT_NAME`
+  (sub-command 12), which the only S30 kernel driver available (mtgpu
+  3.1.0) does not implement. **One ingredient would unblock MUSA-native
+  hardware decode: a Moore Threads S30 kernel driver that implements
+  `MTGPU_QUERY_CMD_MKT_NAME`.** Full analysis with evidence:
+  [root-cause-video-decode-2026-11-26](root-cause-video-decode-2026-11-26.md).
 - **Moore Threads OpenCL** is unavailable: no MT ICD is installed, and the
   archived 2.1.1 ICD caused a kernel Oops in `PVRSRVRGXFlushComputeDataKM`.
   Do not install or retry it.
@@ -103,7 +119,8 @@ PCI function and created a character device; its default ioctl returned
 | Host runtime API (`musart-smoke`) | Verified |
 | `mcc` `mp_10` vector-add and compute suite | Verified on the S30 |
 | Headless Vulkan device/queue/buffer/map | Verified; display rendering not tested |
-| VA-API initialisation and H.264 encode | Verified; hardware decode not exercised |
+| VA-API initialisation and H.264 encode | Verified; hardware decode exercised and failed (2026-11-26) |
+| MUSA-native MUVID hardware decode | Unavailable; the shipped runtime rejects the H.264 codec id, and the upstream library that supports it needs a newer S30 kernel driver |
 | Host-backed allocation after 3.1.0-15 | Verified; zero `warn_alloc` |
 | Moore Threads OpenCL | Unavailable; archived ICD caused a kernel Oops |
 | OpenGL, display output, `torch_musa`, other frameworks | Not tested or claimed |
@@ -111,7 +128,9 @@ PCI function and created a character device; its default ioctl returned
 
 ## Remaining work
 
-Broader MUSA coverage (OpenGL, video decode, `torch_musa`, other frameworks),
+Broader MUSA coverage (OpenGL, `torch_musa`, other frameworks), working
+hardware video decode (blocked on the vendor driver/library defects analysed
+in [root-cause-video-decode-2026-11-26](root-cause-video-decode-2026-11-26.md)),
 Moore Threads OpenCL (needs a driver-compatible ICD, not the archived one), and
 vendor qualification. Basic device bring-up, compute, compiler, VA encode and
 the host-memory fix are done. S30 performance evidence and tuning are in

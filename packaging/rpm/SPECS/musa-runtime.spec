@@ -6,7 +6,7 @@
 
 Name:           musa-runtime
 Version:        1.5.4
-Release:        7%{?dist}
+Release:        8%{?dist}
 Summary:        MUSA runtime userspace for Moore Threads GPUs (MTT S30)
 
 License:        Proprietary
@@ -176,6 +176,16 @@ MUSA_RUNTIME_HOME=/usr/local/musa
 MUSA_HOME=/usr/local/musa-5.2
 export MUSA_RUNTIME_HOME MUSA_HOME
 
+# libvideo_musa.so (the MUVID video API in this runtime) is a libva client.
+# Its built-in default for the driver search path is the Debian location
+# /usr/lib/x86_64-linux-gnu/dri, which does not exist on Fedora, so a MUVID
+# application silently finds no VA driver. Point it at the packaged one.
+# musa-runtime-va installs the driver into /usr/lib64/dri.
+if [ -d /usr/lib64/dri ]; then
+    LIBVA_DRIVERS_PATH=/usr/lib64/dri${LIBVA_DRIVERS_PATH:+:$LIBVA_DRIVERS_PATH}
+    export LIBVA_DRIVERS_PATH
+fi
+
 PATH=$(_musa_fedora_reorder "$PATH" \
     /usr/local/musa/bin:/usr/local/musa-5.2/bin \
     /usr/local/musa/bin:/usr/local/musa-5.2/bin)
@@ -235,6 +245,21 @@ sysctl --system >/dev/null 2>&1 || true
 /usr/lib64/xorg/
 
 %changelog
+* Thu Nov 26 2026 MUSA Fedora Team <musa@fedoraproject.org> - 1.5.4-8
+- Export LIBVA_DRIVERS_PATH=/usr/lib64/dri from
+  /etc/profile.d/zz-musa-fedora.sh. libvideo_musa.so, the MUVID video API in
+  this runtime, is a libva client whose built-in default driver search path
+  is the Debian location /usr/lib/x86_64-linux-gnu/dri. On Fedora that path
+  does not exist, so a MUVID application loads libva but finds no VA driver
+  and fails. Point it at the packaged directory that musa-runtime-va
+  populates.
+- Ship a runtime-library guard: verify-musa.sh now reports any foreign
+  provider of the SONAME libmusa.so.1 in the linker search path. The
+  packaged runtime provides libmusa.so.1.5; an unowned 5.2.0 leftover in
+  /usr/lib64 answers to libmusa.so.1 and speaks a 5.2 UAPI that the 3.1.0
+  kernel driver rejects (MTGPU_QUERY_CMD_MKT_NAME, cmd 12, EINVAL), which
+  makes every consumer of that SONAME fail in muInit().
+
 * Wed Nov 25 2026 MUSA Fedora Team <musa@fedoraproject.org> - 1.5.4-7
 - Add the musa-runtime-va subpackage: the vendor VA-API driver
   (mtgpu_drv_video*.so) as a separate package from musa-runtime-display.

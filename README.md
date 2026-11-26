@@ -16,6 +16,27 @@ For the repair of the installed system's disk boot (GDM crash caused by the
 old base package shipping vendor Mesa DRI drivers), see
 [the 2026-11-23 boot fix](docs/boot-fix-2026-11-23.md).
 
+### Updates — 2026-11-26 (session: cold-boot re-verification)
+
+- **Independent cold boot re-validated the whole stack.** After a fresh
+  reboot (2026-11-26 00:07 UTC) with no blacklist, udev auto-bound `mtgpu`
+  on the S30 and every gate reproduced: `verify-musa.sh --skip-memcpy`
+  **13/0/2**, `s30-perf.sh` **PERF_STATUS: PASS** (6.3/6.5 GB/s pinned,
+  2.7 µs/launch, 52.0 GB/s triad, 1.12× pipeline), `test-vaapi.sh`
+  **14/0/0**, `check-musa-env.sh` **PASS**, `verify-copr-chroots.sh`
+  **20/20** — zero mtgpu kernel faults and zero page-allocation failures in
+  the journal throughout. Perf numbers are stable across three boots on the
+  3.1.0-15 heap-page fix. Full record:
+  [hardware-validation-2026-11-26](docs/hardware-validation-2026-11-26.md).
+- **Host package decision unchanged:** the live host keeps the pinned,
+  verified `mtgpu-dkms` 3.1.0-15 / `musa-toolkit` 3.1.0-5 set while
+  `mtgpu` is loaded; the published 3.1.0-16 / 3.1.0-6 pair (objtool
+  fallback, README payload) is for a module-unloaded window.
+- **Boot verifier re-armed.** `musa-boot-verify.service` had self-removed
+  after its designed one-shot run; reinstalled via
+  `pkexec scripts/install-boot-verify.sh install` so the next reboot writes
+  compute-mode boot evidence to `/var/log/musa-fedora/`.
+
 ### Updates — 2026-11-25 (later session: objtool fallback, 3.1.0-16)
 
 - **A build-log audit (not just “build succeeded”) found objtool silently

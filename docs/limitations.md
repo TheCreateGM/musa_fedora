@@ -2,6 +2,9 @@
 
 This page states what has actually been exercised on the MTT S30 under this
 project and what has not. The latest live evidence is
+[hardware validation 2026-11-26](hardware-validation-2026-11-26.md) — an
+independent cold boot that reproduced 13/0/2, PERF PASS, VA-API 14/0/0, env
+PASS, and COPR 20/20 with zero mtgpu kernel faults — following
 [hardware validation 2026-11-25](hardware-validation-2026-11-25.md); measured
 figures are in [performance tuning](performance-tuning.md).
 

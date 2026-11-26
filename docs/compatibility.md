@@ -91,3 +91,13 @@ vendor-qualified S30 OS, so the stack is verified on this host but not
 vendor-qualified. Do not disable IBT/CET, modify vendor-core metadata, or load
 another MTGPU module. Broader features and an S30-qualified driver/runtime
 matrix are needed before extending the claim.
+
+## 2026-11-26 validation update (Fedora 45 / kernel 7.3.4)
+
+- Host: Fedora 45, kernel `7.3.4-300.fc45.x86_64`, MTT S30 `[1ed5:0102]` bound to `mtgpu` 3.1.0, IOMMU enabled.
+- Validated package set on host: `mtgpu-dkms-3.1.0-15.fc45`, `mtgpu-firmware-3.1.0-5.fc45`, `musa-runtime-1.5.4-8.fc45`, `musa-runtime-va-1.5.4-8.fc45`, `musa-sdk-5.2.0-7.fc45`, `musa-toolkit-3.1.0-5.fc45`.
+- Live verification: `scripts/check-musa-env.sh` PASS; `scripts/verify-musa.sh --skip-memcpy` **15 passed, 0 failed, 2 skipped** (muMemcpyTest skipped by request; no Moore Threads OpenCL ICD).
+- Container install + real-GPU passthrough (podman, disposable Fedora 45 container, host packages untouched): `scripts/test-container-install.sh --skip-memcpy` **13 passed, 0 failed**, `TEST_CONTAINER_INSTALL_STATUS: SUCCESS`.
+- COPR `axogm/musa-fedora` enabled chroots: `fedora-43/44/45/rawhide/eln-x86_64`. Validated local-spec packages built successfully for fedora-43-x86_64: mtgpu-firmware 11392834, mtgpu-dkms 11392833, musa-runtime 11392835, musa-toolkit 11392838, musa-sdk 11392839.
+- Legacy COPR packages `libmusa` and `libdrm-mtgpu` (5.2.0-1 upload sources, no latest builds) are **not compatible** with the validated 3.1.0+1.5.4 stack and must not be built/installed into it.
+- Scope boundary unchanged: verified MUSA compute/runtime/compiler/VAAPI paths on this host; no claim of vendor-qualified Fedora support, OpenCL MT ICD, display rendering, or general framework compatibility without evidence.

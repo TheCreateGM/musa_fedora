@@ -1,0 +1,10 @@
+prefix=/usr/local/musa
+exec_prefix=${prefix}
+libdir=${prefix}/lib
+includedir=${prefix}/include
+
+Name: musart
+Description: MUSA Runtime API (MTT S30 validated stack, 1.5.4 runtime)
+Version: 1.5.4
+Libs: -L${libdir} -lmusart
+Cflags: -I${includedir}

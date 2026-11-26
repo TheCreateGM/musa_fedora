@@ -1,0 +1,10 @@
+prefix=/usr
+exec_prefix=${prefix}
+libdir=/usr/lib64
+includedir=/usr/local/musa/include
+
+Name: musa
+Description: MUSA Driver API (MTT S30 validated stack, runtime 1.5.4-compatible)
+Version: 1.5.4
+Libs: -L${libdir} -lmusa
+Cflags: -I${includedir}

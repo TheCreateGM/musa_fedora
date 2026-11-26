@@ -26,6 +26,17 @@ old base package shipping vendor Mesa DRI drivers), see
   run flaked its bandwidth check under memory pressure (6.2G/7.4G used)
   and passed on retry with no code change. Full evidence:
   [hardware-validation-2026-11-26-session3](docs/hardware-validation-2026-11-26-session3.md).
+- **Fresh-boot reproduction (04:37 UTC boot, no code change):** the same
+  gates re-passed — `verify-musa.sh --skip-memcpy` **15/0/2**,
+  `check-musa-env.sh` **PASS**, `s30-perf.sh` **PASS** (pinned H2D 6.4 GB/s,
+  2.8 µs/launch, 51.8 GB/s triad, 1.14× pipeline; `PreferShared` CACHE knob
+  still unsupported), `verify-copr-chroots.sh` **20/20** — with zero mtgpu
+  kernel faults and zero page-allocation failures in the journal. The
+  `MKT_NAME` porting question was also closed: the query dispatch table
+  `query_cmd_ioctl_desc` and all twelve `mtgpu_query_*_ioctl` handlers are
+  local symbols inside the proprietary `objs/x86_64/mtgpu_core.o_binary`, so
+  sub-command 12 cannot be added from the open source (evidence:
+  `musa-data/research/video-decode-codec-enum-mismatch-2026-11-26.md` §4.3c).
 
 ### Updates — 2026-11-26 (session: cold-boot re-verification)
 
@@ -317,8 +328,8 @@ preserved in `/var/backups/musa-fedora-compute-mode/20261124T020848Z/` and can
 be restored with `scripts/compute-mode.sh disable`.
 
 Installed set: `mtgpu-dkms` 3.1.0-15 (16 KiB system/SVM heap page),
-`mtgpu-firmware` 3.1.0-5, `musa-runtime` 1.5.4-7, `musa-runtime-va`
-1.5.4-7, `musa-sdk` 5.2.0-7 and `musa-toolkit` 3.1.0-5 (activated from the
+`mtgpu-firmware` 3.1.0-5, `musa-runtime` 1.5.4-8, `musa-runtime-va`
+1.5.4-8, `musa-sdk` 5.2.0-7 and `musa-toolkit` 3.1.0-5 (activated from the
 published repo on 2026-11-25; `rpm -V` and `dnf check` clean). COPR also
 publishes `mtgpu-dkms` 3.1.0-16 (objtool fallback) and `musa-toolkit`
 3.1.0-6 (README payload); both are deliberately **not installed on the live
@@ -327,10 +338,10 @@ host** — a DKMS transaction must not replace the module under a loaded
 described in [objtool-fallback-2026-11-25](docs/objtool-fallback-2026-11-25.md).
 `musa-runtime-display` is deliberately not installed.
 
-On the 2026-11-25 boot `scripts/verify-musa.sh --skip-memcpy` reports **13
+On the 2026-11-26 boot `scripts/verify-musa.sh --skip-memcpy` reports **15
 passed, 0 failed, 2 skipped** (the vendor memcpy test needs more host RAM than
 the capped test scope allows; OpenCL is absent). The table below records the
-2026-11-17 through 2026-11-25 hardware runs.
+2026-11-17 through 2026-11-26 hardware runs.
 
 | Layer | State | Evidence |
 |---|---|---|

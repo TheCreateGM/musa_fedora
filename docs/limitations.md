@@ -18,16 +18,17 @@ normal boot through udev, with compute mode enabled. Installed stack:
 |---|---|
 | `mtgpu-dkms` | 3.1.0-15 on the host; 3.1.0-16 published (objtool fallback, [record](objtool-fallback-2026-11-25.md)) |
 | `mtgpu-firmware` | 3.1.0-5 |
-| `musa-runtime` | 1.5.4-7 |
-| `musa-runtime-va` | 1.5.4-7 |
+| `musa-runtime` | 1.5.4-8 |
+| `musa-runtime-va` | 1.5.4-8 |
 | `musa-sdk` | 5.2.0-7 |
 | `musa-toolkit` | 3.1.0-5 on the host; 3.1.0-6 published (README payload refresh) |
 
-`scripts/verify-musa.sh --skip-memcpy` reports **13 passed, 0 failed, 2
+`scripts/verify-musa.sh --skip-memcpy` reports **15 passed, 0 failed, 2
 skipped**. The skips are the vendor `muMemcpyTest` (it needs more host RAM than
 the capped test scope allows) and Moore Threads OpenCL (no MT ICD installed).
-Without `--skip-memcpy` the suite reports 14 passed, 0 failed, 1 skipped when
-enough host memory is free.
+Without `--skip-memcpy` the suite reports 16 passed, 0 failed, 1 skipped when
+enough host memory is free. The count rose from 13 to 15 on 2026-11-26 when the
+SONAME-hygiene and VA-driver-path guards were added.
 
 ## Verified
 

@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# cuda-config — reports the gencode targets this CUDA compatibility layer
+# supports. Single target: the MUSA mp_10 device (MTT S30).
+# SPDX-License-Identifier: MIT
+case "${1:-}" in
+    -s|--supported-gencodes) echo "compute_10,sm_10";;
+    -v|--version)            echo "11.0";;
+    "")                      echo "compute_10,sm_10";;
+    *) echo "usage: cuda-config [-s|-v]" >&2; exit 2;;
+esac

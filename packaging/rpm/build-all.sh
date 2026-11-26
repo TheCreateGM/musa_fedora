@@ -26,7 +26,7 @@ mkdir -p "$TOPDIR/SRPMS" "$TOPDIR/RPMS"
 # SOURCES tree produced by create-sources.sh / create-sdk-sources.sh.
 ln -sfn "$RPM_DIR/SOURCES" "$TOPDIR/SOURCES"
 
-SPEC_BASE=(mtgpu-firmware mtgpu-dkms musa-runtime musa-sdk musa-toolkit)
+SPEC_BASE=(mtgpu-firmware mtgpu-dkms musa-runtime musa-sdk musa-toolkit musa-cuda-compat)
 
 rpmbuild_flags=(--define "_topdir $TOPDIR" --define "_srcrpmdir %{_topdir}/SRPMS"
                 --define "_rpmdir %{_topdir}/RPMS")

@@ -1,0 +1,3 @@
+#!/bin/sh
+# fatbinary placeholder: MUSA device code is bundled by mcc.
+exit 0

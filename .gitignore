@@ -108,3 +108,7 @@ cmake-build-*/
 
 # RPM signing revocation material (keep private)
 *.rev
+
+# musa-cuda-compat: the shims are build output of src/*.S
+packaging/cuda-compat/libcudart.so.*
+packaging/cuda-compat/libcuda.so.*

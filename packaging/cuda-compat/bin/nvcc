@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+# nvcc — CUDA-source-compatible driver for the MUSA compiler (mcc).
+#
+# Part of musa-cuda-compat. Accepts the subset of the nvcc command line that
+# CUDA projects and build systems (CMake, Meson, autotools, Makefiles) use,
+# drops the flags that only make sense for NVIDIA hardware, and drives the
+# MUSA compiler against the MUSA 1.5.4 runtime libraries.
+#
+# This is not an emulation: kernels are compiled by mcc for the real device
+# (mp_10) and library calls resolve to symbols the MUSA 1.5.4 runtime exports.
+#
+# SPDX-License-Identifier: MIT
+set -uo pipefail
+
+SELF_DIR="$(cd -- "$(dirname -- "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+ROOT="$(cd -- "$SELF_DIR/.." && pwd)"
+
+MUSA_SDK="${MUSA_SDK:-/usr/local/musa-5.2}"
+MUSA_RT="${MUSA_RT:-/usr/local/musa}"
+MCC="${MCC:-$MUSA_SDK/bin/mcc}"
+ARCH="${MUSA_ARCH:-mp_10}"
+
+die() { printf 'nvcc: %s\n' "$*" >&2; exit 1; }
+[[ -x "$MCC" ]] || die "MUSA compiler not found: $MCC"
+
+version_text() {
+    cat <<TXT
+nvcc: MUSA (mcc) Cuda compiler driver, musa-cuda-compat
+Copyright (c) MUSA Fedora contributors
+Cuda compilation tools, release 11.0, V11.0.0
+Build cuda_11.0.MUSA_S30/compat
+TXT
+}
+
+# nvcc options that take a separate value and have no MUSA equivalent.
+takes_value_only() {
+    case "$1" in
+        -Xptxas|-Xnvlink|-Xcudafe|-Xarchive|-ccbin|--compiler-bindir|--threads|\
+        --keep-dir|--options-file|--ptxas-options|-x|--x|--machine|--objdir-as-workdir) return 0;;
+    esac
+    return 1
+}
+
+# nvcc options with no MUSA equivalent that take no value.
+no_value() {
+    case "$1" in
+        --keep|--keep-dir|--resource-usage|-res-usage|--expt-relaxed-constexpr|-expt-relaxed-constexpr|\
+        --expt-extended-lambda|--forward-unknown-to-host-compiler|-forward-unknown-to-host-compiler|-lineinfo|\
+        --lineinfo|-G|--device-debug|-dc|--device-c|--relocatable-device-code|-rdc=true|-rdc|\
+        -m64|--no-device-link|--dryrun|-w|--disable-warnings|-n|-restrict|\
+        --clear-cache|-keep-device-functions|-cubin|-ptx|-fatbin) return 0;;
+    esac
+    return 1
+}
+
+pass=()
+compile_only=0
+link_stage=1
+verbose=0
+have_opt=0
+inputs=0
+
+i=0
+args=("$@")
+n=${#args[@]}
+while (( i < n )); do
+    a="${args[i]}"
+    case "$a" in
+        -h|--help)     version_text; echo; echo "usage: nvcc [options] file.cu ..."; exit 0;;
+        -V|--version|-version) version_text; exit 0;;
+        -v|--verbose)  verbose=1;;
+        __cmake_determine_cuda)
+            echo "#$ TOP=$ROOT"
+            echo "#$ NVVMIR_LIBRARY_DIR=$ROOT/nvvm/libdevice"
+            echo "#$ CICC_PATH=$MUSA_SDK/bin"
+            exit 0;;
+        -Xcompiler|-Xlinker|-Xassembler)
+            if (( i + 1 < n )); then pass+=("${args[i+1]}"); fi
+            i=$((i + 2)); continue;;
+        -Xcompiler=*|-Xlinker=*|-Xassembler=*)
+            pass+=("${a#*=}"); i=$((i + 1)); continue;;
+        -x)            i=$((i + 2)); continue;;      # MUSA mode is forced below
+        -arch=*|--gpu-architecture=*|-gencode=*|--generate-code=*|--gpu-code=*)
+            i=$((i + 1)); continue;;
+        --gpu-architecture|--gpu-code|--generate-code)
+            i=$((i + 2)); continue;;
+        -c|-S|-E)
+            compile_only=1; link_stage=0; pass+=("$a"); i=$((i + 1)); continue;;
+        -O0|-O1|-O2|-O3|-Ofast|-Os|-Oz) have_opt=1; pass+=("$a"); i=$((i + 1)); continue;;
+        -o)            if (( i + 1 < n )); then pass+=("-o" "${args[i+1]}"); fi
+                       i=$((i + 2)); continue;;
+        -o*)           pass+=("$a"); i=$((i + 1)); continue;;
+        -MD|-MMD|-MF|-MT|-MQ)
+            pass+=("$a")
+            if (( i + 1 < n )); then pass+=("${args[i+1]}"); fi
+            i=$((i + 2)); continue;;
+        --use_fast_math) pass+=(-ffast-math); i=$((i + 1)); continue;;
+    esac
+    if takes_value_only "$a"; then
+        i=$((i + 2)); continue
+    fi
+    if no_value "$a"; then
+        i=$((i + 1)); continue
+    fi
+    pass+=("$a")
+    i=$((i + 1))
+done
+
+[[ -f "$ROOT/include/cuda_runtime.h" ]] || die "compat headers missing under $ROOT/include"
+[[ -f "$MUSA_SDK/include/musa_runtime.h" ]] || die "MUSA SDK headers missing: $MUSA_SDK/include"
+
+cmd=("$MCC" -x musa "--musa-path=$MUSA_SDK" "--musa-rt-lib-path=$MUSA_RT/lib"
+     "--offload-arch=$ARCH"
+     -I"$ROOT/include" -include "$ROOT/include/musa_cuda_compat_base.h"
+     -I"$MUSA_SDK/include")
+(( have_opt )) || cmd+=(-O2)
+cmd+=("${pass[@]}")
+if (( link_stage )); then
+    # musart/musa first: mcc also knows the SDK's own runtime directory, and
+    # that one is the wrong ABI for the shipped mtgpu driver.
+    cmd+=(-L"$MUSA_RT/lib" -L"$ROOT/lib64" -Wl,-rpath,"$MUSA_RT/lib"
+          -Wl,-rpath,"$ROOT/lib64" -lmusart -lmusa -lcudart -lcuda)
+fi
+
+run_verbose() {
+    echo "#$ PATH=$MUSA_SDK/bin:/usr/bin:/bin" >&2
+    # musart/musa are needed by the CUDA-named shims and survive CMake's
+    # implicit-library filter, so the host link line stays resolvable.
+    libs="-lcudart -lcuda -lmusart -lmusa -lstdc++ -lm -lgcc_s -lgcc -lc"
+    echo "#$ LIBRARIES= $libs" >&2
+    echo "#$ INCLUDES= $ROOT/include -I$MUSA_SDK/include" >&2
+    echo "#$ SYSTEM_INCLUDES= -isystem /usr/include" >&2
+    echo >&2   # keep a newline in front of the link line after CMake strips assignments
+    if (( link_stage )); then
+        echo "#$ ${CC:-gcc} -L$ROOT/lib64 -L$MUSA_RT/lib -Wl,-rpath,$ROOT/lib64 $libs -o a.out" >&2
+    fi
+    printf '#$ %s\n' "${cmd[*]}" >&2
+    "${cmd[@]}"
+}
+
+if (( verbose )); then
+    run_verbose
+else
+    exec "${cmd[@]}"
+fi

@@ -1,0 +1,3 @@
+#!/bin/sh
+# nvlink placeholder: MUSA device linking is done by mcc.
+exit 0

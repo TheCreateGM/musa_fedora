@@ -12,7 +12,7 @@
 
 Name:           mtgpu-dkms
 Version:        3.1.0
-Release:        16%{?dist}
+Release:        17%{?dist}
 Summary:        DKMS kernel driver source for Moore Threads GPUs (mtgpu)
 
 License:        GPL-2.0-only
@@ -141,6 +141,38 @@ d /var/log/mtgpu 0755 root root -
 d /var/log/mtgpu/event_report 0755 root root -
 MTGPU_TMPFILES
 
+# Keep the mtgpu module out of the initramfs.
+#
+# The vendor driver creates its event-report directories at module
+# initialisation: /var/log/mtgpu, /var/log/mtgpu/event_report and one directory
+# per device UUID.  dracut in hostonly mode pulls the module into the
+# initramfs because the MTT S30 is present in the host, and udev coldplugs it
+# there.  The initramfs has no /var/log, so every one of those creations fails
+# with -ENOENT, mtgpu_event_report_persist_init() aborts before it opens the
+# XID record file, and the driver logs "xid_record file create fd failed".
+# The GPU then runs for the whole lifetime of the machine without ever
+# writing an XID record, so GPU faults are silently lost.
+#
+# Excluding the module from the initramfs makes the driver initialise in the
+# real root, where /var/log/mtgpu exists and the XID record file lives on a
+# persistent filesystem.  The module is still loaded automatically in the real
+# root by udev (the PCI modalias of 1ed5:0102 matches the mtgpu alias), so no
+# manual action and no blacklist are involved.
+mkdir -p %{buildroot}%{_sysconfdir}/dracut.conf.d
+cat > %{buildroot}%{_sysconfdir}/dracut.conf.d/99-musa-mtgpu.conf <<'MTGPU_DRACUT'
+# Exclude the Moore Threads mtgpu driver from the initramfs so that it
+# initialises in the real root, where /var/log/mtgpu exists and the vendor
+# event-report/XID record file can be created and kept.
+#
+# Without this, dracut (hostonly mode) loads mtgpu inside the initramfs, where
+# /var/log does not exist; the driver then logs
+#   Failed to create directory: /var/log/mtgpu, ret = -2
+#   ...
+#   xid_record file create fd failed
+# at every boot and no GPU fault record is ever written.
+omit_drivers+=" mtgpu "
+MTGPU_DRACUT
+
 %files
 %defattr(-,root,root,-)
 %doc README.md
@@ -148,6 +180,7 @@ MTGPU_TMPFILES
 %config(noreplace) %{_sysconfdir}/modprobe.d/90-mtgpu-headless.conf
 %{_udevrulesdir}/70-mtgpu.rules
 %{_tmpfilesdir}/mtgpu.conf
+%config(noreplace) %{_sysconfdir}/dracut.conf.d/99-musa-mtgpu.conf
 
 %post
 # Register, build and install for the running kernel. Failures are reported but
@@ -165,6 +198,15 @@ if [ "$1" -ge 1 ]; then
 fi
 install -d -m 0755 /var/log/mtgpu/event_report 2>/dev/null || :
 depmod -a >/dev/null 2>&1 || :
+# The dracut exclusion of this module only takes effect after the initramfs is
+# rebuilt.  Rebuild it for the running kernel when possible; a failure here is
+# not fatal, the module simply stays in the initramfs and the XID record file
+# is still not written.
+if [ -x /usr/bin/dracut ] && [ -d "/lib/modules/$(uname -r)" ]; then
+    /usr/bin/dracut --force --kver "$(uname -r)" >/dev/null 2>&1 || \
+        echo "WARNING: dracut could not rebuild the initramfs for $(uname -r);" \
+             "run 'dracut --force' manually so that mtgpu is kept out of it." >&2
+fi
 
 %preun
 if [ "$1" -eq 0 ]; then
@@ -175,6 +217,24 @@ fi
 depmod -a >/dev/null 2>&1 || :
 
 %changelog
+* Tue Nov 27 2026 MUSA Fedora Team <musa@fedoraproject.org> - 3.1.0-17
+- Keep the mtgpu module out of the initramfs (omit_drivers+=" mtgpu" in
+  /etc/dracut.conf.d/99-musa-mtgpu.conf).  The vendor driver creates its
+  event-report directories at module initialisation, but dracut in hostonly
+  mode loads the module inside the initramfs, where /var/log does not exist.
+  Every directory creation then failed with -ENOENT, the driver logged
+  "Failed to create directory: /var/log/mtgpu, ret = -2" and
+  "xid_record file create fd failed" at every boot, and no GPU fault record
+  was ever written: the XID record file in /var/log/mtgpu has been unchanged
+  since 2026-11-19 on the validation host.  Root cause analysis, the
+  disassembly of event_report_create_fd/mtgpu_drv_mkdir and the kernel probe
+  that confirm it are documented in
+  docs/root-cause-mtgpu-xid-initramfs-2026-11-27.md.  The driver is still
+  loaded automatically in the real root by udev through the PCI modalias of
+  1ed5:0102; no blacklist is used and the device stays fully enabled.
+- Regenerate the initramfs from %post so that the exclusion takes effect
+  without manual action.
+
 * Wed Nov 25 2026 MUSA Fedora Team <musa@fedoraproject.org> - 3.1.0-16
 - Rebuild a working objtool instead of skipping it when the kernel tree's
   prebuilt objtool cannot start (rawhide binutils SONAME drift, observed on

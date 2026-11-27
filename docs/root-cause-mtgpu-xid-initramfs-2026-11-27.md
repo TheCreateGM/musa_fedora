@@ -142,10 +142,32 @@ the `pci:v00001ED5d00000102` alias of the mtgpu module matches - so:
 The package ships this file (`mtgpu-dkms` release 3.1.0-17) and rebuilds the
 initramfs from `%post`.
 
-## Verification
+## Verification — NOT YET PASSING (status 2026-11-27 08:15 UTC)
 
-See `docs/hardware-validation-2026-11-27-xid-fix.md` for the post-reboot
-evidence.
+The `omit_drivers` change is **not verified as a fix**. Evidence from the
+boot at 2026-11-27 06:54 UTC (`journalctl -b 0`):
+
+* The initramfs was rebuilt at 06:51 and contains no `mtgpu.ko` (`lsinitrd`
+  count 0). The module therefore loads only after `switch-root`
+  (`mtgpu: loading out-of-tree module` at 06:54:56).
+* The same failure still occurs in the real root at 06:54:59:
+  `Failed to create directory: /var/log/mtgpu, ret = -2`, then the
+  `/event_report/<uuid>` line and `xid_record file create fd failed`.
+* `/var/log/mtgpu` and `/var/log` exist on disk, and the systemd-udevd
+  process sees the root mount (`/proc/<pid>/root` -> `/`), so the
+  "parent directory missing" explanation in Step 3 above is **not** the
+  whole story. The cause of the `-ENOENT` remains open.
+* The file `docs/hardware-validation-2026-11-27-xid-fix.md` referenced
+  earlier **does not exist**. No post-reboot XID evidence has been recorded.
+* `mtgpu-dkms` 3.1.0-17 was **not** built in COPR and is not installed; the
+  host runs 3.1.0-16. The `/etc/dracut.conf.d/99-musa-mtgpu.conf` file on the
+  host was placed by hand and is not owned by any installed package.
+
+Next steps: determine what produces `-ENOENT` inside the driver's directory
+creation (for example by a controlled probe run under the same systemd
+unit context as udev, with no unbind/rebind), then validate with one
+reboot. Do not describe this as fixed until a boot shows the three
+`Failed to create directory` lines absent and an XID record written.
 
 ## What was ruled out
 

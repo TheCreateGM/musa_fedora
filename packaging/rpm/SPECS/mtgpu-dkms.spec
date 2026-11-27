@@ -226,9 +226,9 @@ depmod -a >/dev/null 2>&1 || :
   "Failed to create directory: /var/log/mtgpu, ret = -2" and
   "xid_record file create fd failed" at every boot, and no GPU fault record
   was ever written: the XID record file in /var/log/mtgpu has been unchanged
-  since 2026-11-19 on the validation host.  Root cause analysis, the
-  disassembly of event_report_create_fd/mtgpu_drv_mkdir and the kernel probe
-  that confirm it are documented in
+  since 2026-11-19 on the validation host.  UNVERIFIED: the 2026-11-27 06:54
+  boot with the module outside the initramfs still logged the -ENOENT
+  failures, so this change does not yet fix the XID records.  Analysis is in
   docs/root-cause-mtgpu-xid-initramfs-2026-11-27.md.  The driver is still
   loaded automatically in the real root by udev through the PCI modalias of
   1ed5:0102; no blacklist is used and the device stays fully enabled.

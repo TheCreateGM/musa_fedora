@@ -16,6 +16,20 @@ For the repair of the installed system's disk boot (GDM crash caused by the
 old base package shipping vendor Mesa DRI drivers), see
 [the 2026-11-23 boot fix](docs/boot-fix-2026-11-23.md).
 
+### Updates — 2026-11-27 (session: end-to-end LLM inference)
+
+- **LLM inference now runs on the S30 through the 1.5.4 runtime.** New
+  `apps/musa-infer/` is a self-contained Llama-2 GGUF engine (CPU reference plus
+  MUSA kernels, no framework) built with `mcc` 5.2.0 and the CUDA-compat layer.
+  TinyLlama-1.1B-Chat Q8_0 runs at **12.58 tok/s** generation (16 tokens);
+  `--backend compare` reports `max_abs=9.47e-05`, `top1_same=10/10`, PASS, and
+  the greedy continuation `, World!` and the chat answer `The capital of France
+  is Paris.` match an independent `llama.cpp` `a07831a` reference exactly.
+  `tests/musa-infer/run.sh` passes all four checks. This is not a framework
+  path: `torch_musa` issue #134 excludes the S30 and the runtime ships no
+  `mublas`/`mudnn` for `mp_10`. Details and the negative CUDA-graph result:
+  [musa-infer](docs/musa-infer.md).
+
 ### Updates — 2026-11-26 (session: perf AMPLIFY flake fixed)
 
 - **`s30-perf.sh` AMPLIFY flake root-caused and fixed.** The suite sometimes
@@ -370,6 +384,7 @@ the capped test scope allows; OpenCL is absent). The table below records the
 | Compiler target | **verified** | MUSA 5.2.0 `mcc` compiled `mp_10` vector-add |
 | GPU kernel execution | **verified** | vector-add completed; all 1,048,576 results matched |
 | MUSA compute operations | **verified** | SAXPY, shared reduction, atomics, constant memory, device math, 2D launch, D2D copy, and FP64 passed |
+| LLM inference on the S30 | **verified 2026-11-27** | `apps/musa-infer` runs TinyLlama-1.1B Q8_0 through runtime 1.5.4: 12.58 tok/s generation, CPU/GPU compare PASS (`max_abs=9.47e-05`, `top1_same=10/10`), token-for-token match with llama.cpp `a07831a` — [details](docs/musa-infer.md) |
 | Host-memory allocation (SVM heap 16 KiB) | **verified 2026-11-25** | 3.1.0-15 fixed the order-6 heap page; alloc latency p50 0.064 ms, zero `warn_alloc`, benchmark PASS |
 | VA-API on the S30 VPU | **verified 2026-11-25** | `musa-runtime-va` 1.5.4-7; vaInitialize, 20 profiles, H.264 encode round trip (14/0/0) |
 | Hardware video decode (VA-API VLD) | **broken 2026-11-26** | exercised via `scripts/hardware/test-video-decode.sh`; the packaged driver build fails `mos_bo_alloc DEC_MV`, the older build rejects the picture — [root cause](docs/root-cause-video-decode-2026-11-26.md) |
@@ -401,6 +416,7 @@ separate 5.2.0 runtime suitable for S30 execution.
 driver-s30-3.1.0/     S30 driver source and compatibility/build files
 scripts/              build, install, IOMMU, verification helpers
 tests/                hardware tests (MUSA + raw ioctl ABI probes)
+apps/                 end-to-end workloads (musa-infer LLM engine)
 docs/                 verified analysis and compatibility notes
 packaging/            RPM/DKMS packaging
 ```
@@ -471,6 +487,10 @@ recheck. Do not use the 5.2.0 runtime for S30 execution.
   them corrupts the device-properties ABI. Use the 5.2.0 SDK for the `mcc`
   compiler and device-code headers, and keep host code within the API exported
   by `libmusart.so.1.5.4`.
+* No vendor BLAS or AI framework supports this GPU: `torch_musa` issue #134
+  places the S30 outside its scope and the 1.5.4 runtime has no `mublas` or
+  `mudnn` for `mp_10`. `apps/musa-infer` is a self-contained alternative for
+  Llama-2-class models, not a drop-in framework replacement.
 * Display output is not configured on the S30; i915 drives the desktop.
 * The archived MobiMaliang 2.1.1 OpenCL ICD is unsafe with the active driver:
   its compute probe caused a kernel Oops in `mtgpu`. Do not install or run it.

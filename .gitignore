@@ -95,6 +95,9 @@ venv/
 cmake-build-*/
 *.cache
 
+# musa-infer binary (built from apps/musa-infer)
+/apps/musa-infer/musa-infer
+
 # Generated GPU/API smoke-test binaries
 /tests/musa-vector-add
 /tests/musart-smoke

@@ -208,30 +208,45 @@ Evidence is recorded in
 
 ## Remaining work
 
-### 1. Packaging reconciliation and deployment
+Updated 2026-11-27 — most items listed here historically are now done: the
+six-package RPM set builds on COPR for fedora-43/44/45/eln/rawhide
+(`scripts/verify-copr-chroots.sh` 20/20), the isolated container install test
+passes (13/0), VA-API decode works (14/0/0), compute mode is enabled across
+reboots, and LLM inference runs on the S30 via `apps/musa-infer` (see
+[docs/hardware-validation-2026-11-27-reverify.md](docs/hardware-validation-2026-11-27-reverify.md)).
+The items below are the ones that remain open.
 
-Five Fedora RPM specs exist and build and now target the working stack. The
-five-RPM set installs in an isolated Fedora 45 container and its packaged
-runtime and `mcc` run on the physical S30 (see `docs/current-state-2026-11-17.md`).
-RPM OpenPGP signing trust, and DKMS/kernel-update and recovery procedures, are
-still required. Do not install a DKMS package over the live module without a
-separate recovery plan.
+### 1. RPM OpenPGP signing
 
-### 2. Broader feature and framework support
+The local build tooling produces signed artifacts and the trust setup is
+documented in [docs/rpm-signing.md](docs/rpm-signing.md); a host-wide trust
+rollout is still a deliberate manual step, not automated.
 
-Before the later OpenCL Oops, device discovery, the vendor copy test, host
-runtime APIs, eight `mp_10` compute operations, one vector-add, and a headless
-Vulkan buffer/memory path were hardware-verified. The system has no Moore
-Threads OpenCL ICD; the archived 2.1.1 ICD compute probe triggered an `mtgpu`
-kernel Oops and must not be rerun. Display rendering, video, `torch_musa`, and
-general frameworks remain untested. The public SDK catalog does not list S30
-or Fedora.
+### 2. Broader feature and framework support (vendor-dependent)
+
+Verified on hardware: device discovery, host runtime APIs, eight `mp_10`
+compute operations, headless Vulkan, VA-API decode, and the self-contained
+`musa-infer` LLM path. Still absent, and blocked on the vendor rather than this
+repository:
+
+* No Moore Threads OpenCL ICD safe with the 3.1.0 driver (the archived 2.1.1
+  ICD compute probe oopsed the kernel and must not be rerun).
+* No `mublas`/`mudnn` for `mp_10`; `torch_musa` issue #134 excludes the S30, so
+  generic frameworks cannot target this GPU. `apps/musa-infer` is the working
+  alternative, not a framework replacement.
+* S30 display output is not configured; i915 drives the desktop.
+* The `MKT_NAME` query sub-command dispatch lives inside the proprietary
+  `objs/x86_64/mtgpu_core.o_binary`; it cannot be added from open source
+  (evidence: `musa-data/research/video-decode-codec-enum-mismatch-2026-11-26.md`
+  §4.3c).
 
 ### 3. Vendor qualification
 
-Obtain the supported S30 runtime/driver/firmware matrix and Fedora/Intel
-qualification from Moore Threads. The separate 5.2.0 runtime is not compatible
-with the 3.1.0 driver ABI and must not replace 1.5.4.
+The supported S30 runtime/driver/firmware matrix and Fedora/Intel
+qualification still need Moore Threads' input; a support-request draft is in
+[docs/vendor-support-request-draft.md](docs/vendor-support-request-draft.md).
+The 5.2.0 runtime remains incompatible with the 3.1.0 driver ABI and must not
+replace 1.5.4.
 
 ### 4. Kernel driver safety
 

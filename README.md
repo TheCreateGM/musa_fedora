@@ -16,6 +16,21 @@ For the repair of the installed system's disk boot (GDM crash caused by the
 old base package shipping vendor Mesa DRI drivers), see
 [the 2026-11-23 boot fix](docs/boot-fix-2026-11-23.md).
 
+### Updates — 2026-11-27 (full-gate re-verify)
+
+- **Every gate re-passed on the live host with the current installed set**
+  (`mtgpu-dkms` 3.1.0-16, `musa-runtime` 1.5.4-8, `musa-sdk` 5.2.0-7,
+  `musa-cuda-compat` 1.0.0-1): `verify-musa.sh --skip-memcpy` **15/0/2**,
+  `s30-perf.sh` **PASS** (51.7 GB/s triad, 1.11× two-stream pipeline),
+  `test-vaapi.sh` **14/0/0**, `check-musa-env.sh` **PASS**,
+  `tests/musa-infer/run.sh` **PASS**, `verify-copr-chroots.sh` **20/20**
+  (both COPR repos: 30/30 succeeded states), isolated podman install
+  **13/0**, and `apps/musa-infer` reproduced its documented performance
+  (12.50 tok/s generation, 16 tokens, identical top-1 and greedy text).
+  Kernel journal shows only the known-benign taint and event-report mkdir
+  messages — zero real faults. Record:
+  [hardware-validation-2026-11-27-reverify](docs/hardware-validation-2026-11-27-reverify.md).
+
 ### Updates — 2026-11-27 (session: end-to-end LLM inference)
 
 - **LLM inference now runs on the S30 through the 1.5.4 runtime.** New

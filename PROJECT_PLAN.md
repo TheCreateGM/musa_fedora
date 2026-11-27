@@ -210,7 +210,10 @@ Evidence is recorded in
 
 Updated 2026-11-27 — most items listed here historically are now done: the
 six-package RPM set builds on COPR for fedora-43/44/45/eln/rawhide
-(`scripts/verify-copr-chroots.sh` 20/20), the isolated container install test
+(`scripts/verify-copr-chroots.sh` now **24/24**: the map gained the
+`fedora-43` chroot that had been enabled in `musa-fedora` on 2026-11-26 but
+was never asserted, and the gate cross-checks its map against the COPR API),
+the isolated container install test
 passes (13/0), VA-API decode works (14/0/0), compute mode is enabled across
 reboots, and LLM inference runs on the S30 via `apps/musa-infer` (see
 [docs/hardware-validation-2026-11-27-reverify.md](docs/hardware-validation-2026-11-27-reverify.md)).

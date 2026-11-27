@@ -16,6 +16,33 @@ For the repair of the installed system's disk boot (GDM crash caused by the
 old base package shipping vendor Mesa DRI drivers), see
 [the 2026-11-23 boot fix](docs/boot-fix-2026-11-23.md).
 
+### Updates — 2026-11-27 (second pass: gate coverage + RPM signing)
+
+- **`verify-copr-chroots.sh` closed a coverage hole: 20/20 → 24/24.** The gate's
+  chroot map still had four chroots for `musa-fedora`, but the COPR API
+  (`chroot_repos`) shows **five** enabled in both projects — `fedora-43` had
+  been enabled on 2026-11-26 after the map was written. The map now includes
+  `fedora-43-x86_64`, and the gate cross-checks its own map against the live
+  API on every run so drift fails loudly. Re-run result: **24/24**, including
+  all seven expected artifacts at the expected versions for `fedora-43` in
+  `musa-fedora`.
+- **Local RPM signing closed: `0/8` → `8/8`, plus a host-wide trust rollout.**
+  All eight local-build RPMs (`mtgpu-dkms` 3.1.0-16 … `musa-cuda-compat`
+  1.0.0-1) signed with the project key, then the public key imported with
+  `pkexec rpm --import` (absolute path required), so a plain `rpm -K` now
+  reports `digests signatures OK` for all eight. Payloads stayed byte-identical
+  to the `.unsigned` backups. Record: [rpm-signing](docs/rpm-signing.md).
+- **Every gate re-ran and reproduced today's numbers on the same boot:**
+  `verify-musa.sh --skip-memcpy` **15/0/2**, `s30-perf.sh` **PASS** (52.0 GB/s
+  triad, 1.14× pipeline), `test-vaapi.sh` **14/0/0**, `tests/cuda-compat/run.sh`
+  **7/7**, `tests/musa-infer/run.sh` **PASS** (12.50 tok/s), container install
+  **13/0**, toolchain compile-only **PASS**, **0 mtgpu kernel faults**.
+- **The two failed `musa-cuda-compat` builds were root-caused.** 11393017,
+  11393009 (musa-fedora) and 11393010 (musa-mtt-s30) all die at `make:
+  command not found` because that SRPM carried no `BuildRequires`; spec fix
+  `f8a5c98` and successors 11393068/11393082/11393083 confirmed green. Evidence:
+  `musa-data/research/cuda-compat-copr-build-failure-2026-11-27.md`.
+
 ### Updates — 2026-11-27 (full-gate re-verify)
 
 - **Every gate re-passed on the live host with the current installed set**
@@ -371,16 +398,16 @@ removes the 2026-11-23 GDM crash condition. The previous boot-time block is
 preserved in `/var/backups/musa-fedora-compute-mode/20261124T020848Z/` and can
 be restored with `scripts/compute-mode.sh disable`.
 
-Installed set: `mtgpu-dkms` 3.1.0-15 (16 KiB system/SVM heap page),
-`mtgpu-firmware` 3.1.0-5, `musa-runtime` 1.5.4-8, `musa-runtime-va`
-1.5.4-8, `musa-sdk` 5.2.0-7 and `musa-toolkit` 3.1.0-5 (activated from the
-published repo on 2026-11-25; `rpm -V` and `dnf check` clean). COPR also
-publishes `mtgpu-dkms` 3.1.0-16 (objtool fallback) and `musa-toolkit`
-3.1.0-6 (README payload); both are deliberately **not installed on the live
-host** — a DKMS transaction must not replace the module under a loaded
-`mtgpu`. Install them in a window where the module is not loaded, as
-described in [objtool-fallback-2026-11-25](docs/objtool-fallback-2026-11-25.md).
-`musa-runtime-display` is deliberately not installed.
+**Installed set (verified 2026-11-27, `rpm -q`):** `mtgpu-dkms` 3.1.0-16
+(objtool fallback; installed 2026-11-27 00:09 UTC, DKMS built the running
+7.3.4 module at 00:09 before the 00:11 boot, `vermagic 7.3.4-300.fc45.x86_64`),
+`mtgpu-firmware` 3.1.0-5, `musa-runtime` 1.5.4-8, `musa-runtime-va` 1.5.4-8,
+`musa-sdk` 5.2.0-7, `musa-toolkit` 3.1.0-6 (installed 00:10 UTC) and
+`musa-cuda-compat` 1.0.0-1. The 16 KiB system/SVM heap-page fix of 3.1.0-15 is
+in 3.1.0-16 as well. RPM signatures: all eight local-build RPMs are signed and
+the key is in the system ring (`rpm -K` → `digests signatures OK`), see
+[rpm-signing](docs/rpm-signing.md). `musa-runtime-display` remains deliberately
+**not installed** — the vendor Mesa DRI drivers crash GNOME Shell here.
 
 On the 2026-11-26 boot `scripts/verify-musa.sh --skip-memcpy` reports **15
 passed, 0 failed, 2 skipped** (the vendor memcpy test needs more host RAM than
@@ -408,7 +435,7 @@ the capped test scope allows; OpenCL is absent). The table below records the
 | MUSA driver-API SONAME hygiene | **fixed 2026-11-26** | unowned 5.2.0 `/usr/lib64/libmusa.so.1` quarantined; `verify-musa.sh` now guards against a re-introduction |
 | Headless Vulkan | **verified, limited** | S30 device/queue, buffer allocation, and host-visible memory map passed; no rendering test |
 | Moore Threads OpenCL | **unavailable** | No MT ICD in the default loader; archived 2.1.1 ICD compute probe caused a kernel Oops (do not use) |
-| Copr publication | **verified 2026-11-26** | 9/9 chroots across both projects each publish all seven artifacts at dkms 3.1.0-16, firmware 3.1.0-5, **runtime family 1.5.4-8**, sdk 5.2.0-7, toolkit 3.1.0-6; `scripts/verify-copr-chroots.sh` reports 20/20 checks and all 22 build logs of the runtime-1.5.4-8 submission were inspected with 0 errors — see [COPR verification](docs/copr-verification-2026-11-26.md), [the 11-25 one](docs/copr-verification-2026-11-25.md) and [objtool fallback](docs/objtool-fallback-2026-11-25.md); build success does not qualify driver loading |
+| Copr publication | **verified 2026-11-27** | 10/10 chroots across both projects (five enabled in each, incl. `fedora-43` in `musa-fedora`) each publish all seven artifacts at dkms 3.1.0-16, firmware 3.1.0-5, **runtime family 1.5.4-8**, sdk 5.2.0-7, toolkit 3.1.0-6, cuda-compat 1.0.0-1; `scripts/verify-copr-chroots.sh` reports **24/24** checks and cross-checks its chroot map against the COPR API (it reported 20/20 over the older 9-chroot map on 2026-11-26, when `fedora-43` in `musa-fedora` was not yet asserted), and all 22 build logs of the runtime-1.5.4-8 submission were inspected with 0 errors — see [COPR verification](docs/copr-verification-2026-11-26.md), [the 11-25 one](docs/copr-verification-2026-11-25.md) and [objtool fallback](docs/objtool-fallback-2026-11-25.md); build success does not qualify driver loading |
 | Driver rebuild from source | **verified 2026-11-23** | `scripts/build-kernel-driver.sh` rebuilds `mtgpu` for `7.3.4-300.fc45.x86_64`; vermagic matches and the module aliases equal the installed module's |
 | Fedora 45 container + GPU test (2026-11-25 set) | **verified** | all seven RPMs installed in a throwaway Fedora 45 container with scriptlets disabled; `musaInfo`, vendor `muMemcpyTest` (1 GiB), `musart-smoke`, and an `mcc` `mp_10` vector-add ran on the S30: `13 passed, 0 failed` |
 | Historical Fedora container + GPU test (2026-11-17) | **verified** | the five-RPM set installed in a throwaway container and its packaged runtime and `mcc` ran on the S30: `13 passed, 0 failed` |

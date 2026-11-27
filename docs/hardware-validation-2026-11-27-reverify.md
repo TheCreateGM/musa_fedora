@@ -18,7 +18,7 @@ COPR authenticated as `axogm`; GitHub authenticated as `nnsupermax`.
 | `scripts/check-musa-env.sh` | **PASS** (musaInfo → 1.5.4 runtime, mcc → 5.2.0, LD_LIBRARY_PATH ordering correct) |
 | `tests/musa-infer/run.sh` | **PASS** — all four checks (compare status, GPU tokenizer/decode, chat template) |
 | `apps/musa-infer` fresh run | TinyLlama-1.1B-Chat Q8_0: prompt 12.59 tok/s, **generate 12.50 tok/s** over 16 tokens; top-1 and greedy text `, World!` unchanged |
-| `scripts/verify-copr-chroots.sh` | **20/20** (7 packages × fedora-43/44/45/eln/rawhide; both `musa-fedora` and `musa-mtt-s30` repos report 30/30 succeeded states) |
+| `scripts/verify-copr-chroots.sh` | **20/20** — as this run reported it. Correction added later the same day: that score covered only four chroots for `musa-fedora`, because the script's map predated the `fedora-43` chroot enabled there on 2026-11-26. The map now lists all five chroots of both projects, is cross-checked against the COPR API per run, and re-reports **24/24** including `fedora-43` artifacts in `musa-fedora` (see [compatibility](compatibility.md)). |
 | `scripts/test-container-install.sh --skip-memcpy` (isolated podman) | **13/0** — RPM set installs in a clean Fedora 45 container; packaged runtime discovers the S30; packaged `mcc` mp_10 vector-add runs on the physical S30 |
 
 ## Journal

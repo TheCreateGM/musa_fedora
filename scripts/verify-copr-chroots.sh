@@ -17,9 +17,12 @@ COPR_API="${COPR_API:-https://copr.fedorainfracloud.org/api_3}"
 COPR_DL="${COPR_DL:-https://download.copr.fedorainfracloud.org/results}"
 OWNER="${COPR_OWNER:-axogm}"
 PROJECTS=("musa-fedora" "musa-mtt-s30")
-# Chroots per project, as configured in the COPR projects.
+# Chroots per project, as configured in the COPR projects. The map is
+# cross-checked against the live API below, so a chroot added on the website
+# cannot silently escape this gate (that happened once: fedora-43 was enabled
+# in musa-fedora on 2026-11-26 and the map was not updated until 2026-11-27).
 declare -A CHROOTS=(
-    ["musa-fedora"]="fedora-44-x86_64 fedora-45-x86_64 fedora-eln-x86_64 fedora-rawhide-x86_64"
+    ["musa-fedora"]="fedora-43-x86_64 fedora-44-x86_64 fedora-45-x86_64 fedora-eln-x86_64 fedora-rawhide-x86_64"
     ["musa-mtt-s30"]="fedora-43-x86_64 fedora-44-x86_64 fedora-45-x86_64 fedora-eln-x86_64 fedora-rawhide-x86_64"
 )
 # Package -> expected version-release of the artifact that must be present.
@@ -106,6 +109,27 @@ PY
         fi
     else
         info "build list unavailable (need COPR API access); continuing with repo metadata only"
+    fi
+
+    # --- 1b. the map above must match the project's enabled chroots ------
+    proj_json="$CACHE_ROOT/$proj-project.json"
+    curl -fsS -H "Authorization: token $COPR_TOKEN" \
+        "$COPR_API/project?ownername=$OWNER&projectname=$proj" \
+        -o "$proj_json" 2>/dev/null
+    if [[ -s "$proj_json" ]]; then
+        api_chroots="$(python3 -c 'import json,sys; print(" ".join(sorted((json.load(open(sys.argv[1])).get("chroot_repos") or {}).keys())))' "$proj_json" 2>/dev/null)"
+        if [[ -n "$api_chroots" ]]; then
+            map_chroots="$(printf '%s\n' ${CHROOTS[$proj]} | sort | tr '\n' ' ' | sed 's/ *$//')"
+            if [[ "$api_chroots" == "$map_chroots" ]]; then
+                ok "chroot map matches the $(wc -w <<<"$api_chroots") enabled chroots for $proj"
+            else
+                bad "chroot map drift for $proj: map=[$map_chroots] api=[$api_chroots]"
+            fi
+        else
+            info "project JSON carried no chroot_repos; chroot map not cross-checked"
+        fi
+    else
+        info "project list unavailable (need COPR API access); chroot map not cross-checked"
     fi
 
     # --- 2. artifacts per chroot from the published repo -----------------

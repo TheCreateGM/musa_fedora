@@ -72,6 +72,21 @@ SONAME-hygiene and VA-driver-path guards were added.
 - **Moore Threads OpenCL** is unavailable: no MT ICD is installed, and the
   archived 2.1.1 ICD caused a kernel Oops in `PVRSRVRGXFlushComputeDataKM`.
   Do not install or retry it.
+- **Vendor on-disk XID / fault record file** (`/var/log/mtgpu/event_report/
+  <uuid>/xid_records`) is **not written** — a proven **vendor driver
+  limitation**, not a GPU defect. The driver performs its event-report
+  directory creation from a kernel workqueue (`drv_mkdir_work_func`) that
+  resolves paths against `init_fs` (the initramfs `rootfs` superblock,
+  `sb_dev=0x4`) rather than the real btrfs root (`sb_dev=0x26`), and its
+  `mtgpu_drv_mkdir` is find-or-fail (`start_creating_path` with only
+  `LOOKUP_DIRECTORY`, no `LOOKUP_CREATE`), so it cannot create the missing
+  tree and logs `-ENOENT` at every boot. GPU faults/XIDs are still reported to
+  `dmesg`/`journalctl`; only the vendor's on-disk convenience record is
+  absent. Fixing persistent on-disk records requires a vendor driver change
+  (run the mkdir/open in process context against the real root, or pass
+  `LOOKUP_CREATE` + `vfs_mkdir`). Proven by direct A/B kernel probe; full
+  analysis and reproducible diagnostics:
+  [root-cause-mtgpu-xid-initramfs-2026-11-27](root-cause-mtgpu-xid-initramfs-2026-11-27.md).
 - **Display output / rendering / OpenGL** through the S30 is not used or
   claimed. The desktop stays on `i915`. `musa-runtime-display` exists as an
   explicit opt-in but the vendor Mesa driver crashes GNOME Shell on this host;

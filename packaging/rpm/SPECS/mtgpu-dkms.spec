@@ -12,7 +12,7 @@
 
 Name:           mtgpu-dkms
 Version:        3.1.0
-Release:        17%{?dist}
+Release:        18%{?dist}
 Summary:        DKMS kernel driver source for Moore Threads GPUs (mtgpu)
 
 License:        GPL-2.0-only
@@ -130,11 +130,15 @@ install -D -m 0644 90-mtgpu-headless.conf \
     %{buildroot}%{_sysconfdir}/modprobe.d/90-mtgpu-headless.conf
 install -D -m 0644 70-mtgpu.rules %{buildroot}%{_udevrulesdir}/70-mtgpu.rules
 
-# The mtgpu module writes event reports and FEC debug logs to /var/log/mtgpu
-# and logs ENOENT warnings at every load when the directory is absent
-# (observed 2026-11-23 on the S30 host). Create it at boot and at package
-# install so the vendor logging works from any load path, including an
-# initramfs-time load.
+# The mtgpu module writes event reports and FEC debug logs to /var/log/mtgpu.
+# Pre-create the device-independent part of the tree at boot and at package
+# install so it is present for any process-context access or a future vendor
+# driver fix.  NOTE (2026-11-27, proven): this tmpfiles tree does NOT by itself
+# make the vendor XID record file get written.  The driver performs its mkdir
+# from a kernel workqueue that resolves paths against init_fs (the initramfs
+# rootfs superblock), not the real root, and its mtgpu_drv_mkdir is find-or-fail
+# (no LOOKUP_CREATE).  The per-device UUID directory cannot be pre-created here
+# because the UUID is per-GPU.  See docs/root-cause-mtgpu-xid-initramfs-2026-11-27.md.
 mkdir -p %{buildroot}%{_tmpfilesdir}
 cat > %{buildroot}%{_tmpfilesdir}/mtgpu.conf <<'MTGPU_TMPFILES'
 d /var/log/mtgpu 0755 root root -
@@ -143,33 +147,23 @@ MTGPU_TMPFILES
 
 # Keep the mtgpu module out of the initramfs.
 #
-# The vendor driver creates its event-report directories at module
-# initialisation: /var/log/mtgpu, /var/log/mtgpu/event_report and one directory
-# per device UUID.  dracut in hostonly mode pulls the module into the
-# initramfs because the MTT S30 is present in the host, and udev coldplugs it
-# there.  The initramfs has no /var/log, so every one of those creations fails
-# with -ENOENT, mtgpu_event_report_persist_init() aborts before it opens the
-# XID record file, and the driver logs "xid_record file create fd failed".
-# The GPU then runs for the whole lifetime of the machine without ever
-# writing an XID record, so GPU faults are silently lost.
-#
-# Excluding the module from the initramfs makes the driver initialise in the
-# real root, where /var/log/mtgpu exists and the XID record file lives on a
-# persistent filesystem.  The module is still loaded automatically in the real
-# root by udev (the PCI modalias of 1ed5:0102 matches the mtgpu alias), so no
-# manual action and no blacklist are involved.
+# This is general hygiene (smaller initramfs; the driver then loads in the real
+# root via udev on the PCI modalias of 1ed5:0102, with no blacklist and the
+# device fully enabled).  NOTE (2026-11-27, proven): keeping the module out of
+# the initramfs does NOT fix the vendor XID record file.  The record-file
+# failure is caused by the driver running its directory creation in a kernel
+# workqueue that resolves paths against init_fs (the initramfs rootfs
+# superblock, sb_dev=0x4) rather than the real root (btrfs), combined with a
+# find-or-fail mkdir.  Moving where the module is loaded does not change which
+# superblock the workqueue resolves against.  See
+# docs/root-cause-mtgpu-xid-initramfs-2026-11-27.md.
 mkdir -p %{buildroot}%{_sysconfdir}/dracut.conf.d
 cat > %{buildroot}%{_sysconfdir}/dracut.conf.d/99-musa-mtgpu.conf <<'MTGPU_DRACUT'
-# Exclude the Moore Threads mtgpu driver from the initramfs so that it
-# initialises in the real root, where /var/log/mtgpu exists and the vendor
-# event-report/XID record file can be created and kept.
-#
-# Without this, dracut (hostonly mode) loads mtgpu inside the initramfs, where
-# /var/log does not exist; the driver then logs
-#   Failed to create directory: /var/log/mtgpu, ret = -2
-#   ...
-#   xid_record file create fd failed
-# at every boot and no GPU fault record is ever written.
+# Exclude the Moore Threads mtgpu driver from the initramfs (general hygiene:
+# smaller initramfs; the driver loads in the real root via udev on the PCI
+# modalias of 1ed5:0102, no blacklist, device fully enabled).  This does NOT
+# fix the vendor XID record file -- see
+# docs/root-cause-mtgpu-xid-initramfs-2026-11-27.md for the proven cause.
 omit_drivers+=" mtgpu "
 MTGPU_DRACUT
 
@@ -217,6 +211,20 @@ fi
 depmod -a >/dev/null 2>&1 || :
 
 %changelog
+* Fri Nov 27 2026 MUSA Fedora Team <musa@fedoraproject.org> - 3.1.0-18
+- Record the PROVEN root cause of the vendor XID record-file failure and stop
+  overclaiming the omit_drivers change.  Direct A/B kernel probe
+  (tests/xid-ctx-probe) shows the driver's directory creation runs in a kernel
+  workqueue (drv_mkdir_work_func) that resolves paths against init_fs -- the
+  initramfs rootfs superblock (sb_dev=0x4) -- not the real btrfs root
+  (sb_dev=0x26); combined with mtgpu_drv_mkdir being find-or-fail
+  (start_creating_path with only LOOKUP_DIRECTORY, no LOOKUP_CREATE), the
+  kworker gets -ENOENT and cannot create the tree.  Keeping mtgpu out of the
+  initramfs does not change which superblock the workqueue resolves against,
+  so it is hygiene only (smaller initramfs), not an XID fix.  The shipped
+  dracut/tmpfiles comments now say so.  Persistent on-disk XID records require
+  a vendor driver change.  See
+  docs/root-cause-mtgpu-xid-initramfs-2026-11-27.md.
 * Fri Nov 27 2026 MUSA Fedora Team <musa@fedoraproject.org> - 3.1.0-17
 - Keep the mtgpu module out of the initramfs (omit_drivers+=" mtgpu" in
   /etc/dracut.conf.d/99-musa-mtgpu.conf).  The vendor driver creates its

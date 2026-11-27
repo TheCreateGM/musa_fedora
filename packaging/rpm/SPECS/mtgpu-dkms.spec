@@ -217,7 +217,7 @@ fi
 depmod -a >/dev/null 2>&1 || :
 
 %changelog
-* Tue Nov 27 2026 MUSA Fedora Team <musa@fedoraproject.org> - 3.1.0-17
+* Fri Nov 27 2026 MUSA Fedora Team <musa@fedoraproject.org> - 3.1.0-17
 - Keep the mtgpu module out of the initramfs (omit_drivers+=" mtgpu" in
   /etc/dracut.conf.d/99-musa-mtgpu.conf).  The vendor driver creates its
   event-report directories at module initialisation, but dracut in hostonly

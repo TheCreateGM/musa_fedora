@@ -2,6 +2,10 @@
 
 MUSA driver/runtime packaging and test sources for the **Moore Threads MTT S30**
 (`1ed5:0102`) on Fedora. The host is Fedora 45 / kernel `7.3.4-300.fc45.x86_64`.
+The latest read-only baseline (2026-11-27 session 5), including current device
+binding, COPR status, and the Ollama CUDA-13 discovery failure, is in
+[live-baseline-2026-11-27-session5](docs/live-baseline-2026-11-27-session5.md).
+It distinguishes current observations from prior successful hardware results.
 Since **2026-11-24** the host runs with **compute mode enabled**: the boot-time
 `blacklist mtgpu` has been removed (with a full backup and a `disable` path), so
 udev binds the S30 on a normal boot. The change is recorded in

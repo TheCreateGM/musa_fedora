@@ -95,6 +95,19 @@ make -C packaging/cuda-compat regen          # needs /usr/local/musa{,-5.2}
 Anything listed above fails at compile or link time. Nothing degrades
 silently.
 
+### CUDA 13 driver-discovery limitation (observed 2026-11-27)
+
+The compatibility shims have **not** been validated with CUDA 13 applications.
+On Fedora 45, Ollama's bundled CUDA 13 `libggml-cuda.so` called
+`cudaGetDeviceCount`, entered the system `libcuda.so.1` shim's
+`cuGetExportTable` forwarding path, and segfaulted inside vendor
+`libmusa.so.1.5.4`. The kernel logged no `mtgpu` fault; Ollama subsequently
+enumerated the S30 through its separate Vulkan backend, which is not evidence
+of successful inference. Do not infer general pre-linked CUDA binary
+compatibility from the CUDA 11 compatibility tests. Do not repeat this CUDA 13
+probe or change the system shim/service without a reviewed ABI fix. Details:
+[2026-11-27 live baseline](live-baseline-2026-11-27-session5.md).
+
 ### Wording worth keeping straight
 
 * The `cudadevrt` library is **empty**. MUSA bundles device code inside `mcc`

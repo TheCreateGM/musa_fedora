@@ -114,3 +114,33 @@ Same boot as [hardware-validation-2026-11-27-reverify](hardware-validation-2026-
 - Journal: **0** `mtgpu` fault/oops/bug entries for the whole boot after all of the above.
 - The two transient `musa-cuda-compat` COPR failures (11393017, 11393009) were root-caused in their `builder-live.log.gz`: `%build` died with `make: command not found`. The spec fix landed in `f8a5c98` (`BuildRequires: make gcc musa-runtime = 1.5.4`); builds 11393082/11393083 supersede them and succeeded in all five x86_64 chroots.
 - Local RPM signing closed: `signed packages 0/8` → `8/8`, and after a `pkexec rpm --import` of the project key a plain `rpm -K` reports `digests signatures OK` for all eight. See [rpm-signing](rpm-signing.md).
+
+## 2026-11-27 session 4 — musify-text + CMake discovery (cuda-compat 1.0.0-2)
+
+Same boot. This session shipped the last two open CUDA-compatibility items and
+re-ran the affected gates. Full record:
+[hardware-validation-2026-11-27-session4](hardware-validation-2026-11-27-session4.md).
+
+- New in `musa-cuda-compat-1.0.0-2`: `/usr/bin/musify-text` (CUDA↔MUSA source
+  porting derived from the export-verified maps; `--strict`, idempotent,
+  byte-identical `m2c` round trip), `/usr/lib64/cmake/musa/`
+  (`find_package(MUSA)` config + module mode, `musa_add_executable`/
+  `musa_add_library`, S30 defaults `mp_10` + 1.5.4-only link), and the
+  generated runtime-ABI pin `musa_rt154_names.h` (undoes the nine SDK header
+  version renames for MUSA-named callers, `extern "C"`).
+- `tests/cuda-compat/run.sh` **16/0/0** (was 7/7): musified CUDA sources
+  compile with `mcc`, link `libmusart.so.1.5`, and run on the S30; the CMake
+  gate builds and runs a musified `musa_add_executable` target on the S30.
+- `tests/cuda-compat/container-test.sh` **16/0** (was 12/0): the same gates
+  pass against the installed RPM layout inside a disposable container with
+  the S30 passed through.
+- COPR: builds **11397615** (`musa-fedora`) and **11397626**
+  (`musa-mtt-s30`) publish `musa-cuda-compat-1.0.0-2` for fedora-43/44/45/
+  eln/rawhide x86_64; `scripts/verify-copr-chroots.sh` now asserts it in
+  its expectation set — **24/24**.
+- Signing key rotated to `BFAB85E6884C116DAA985DF0C2B44B18E3841DC2` after the
+  old key proved passphrase-protected against headless use; 8/8 local RPMs
+  signed and verified. The `pkexec` imports of the new key into the system
+  keyring and of `1.0.0-2` into the host were still awaiting the
+  authorization dialog at session end; host remains on `1.0.0-1` (verified,
+  functional).

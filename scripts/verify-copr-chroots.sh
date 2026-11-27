@@ -34,6 +34,7 @@ EXPECTED=(
     "musa-toolkit:3.1.0-6"
     "mtgpu-dkms:3.1.0-16"
     "mtgpu-firmware:3.1.0-5"
+    "musa-cuda-compat:1.0.0-2"
 )
 
 INCLUDE_SRC=0

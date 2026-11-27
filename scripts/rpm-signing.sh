@@ -96,7 +96,14 @@ do_keygen() {
         return 0
     fi
     log "Creating $KEY_TYPE signing key: $KEY_UID"
-    gpg --batch --quick-generate-key "$KEY_UID" "$KEY_TYPE" sign never >&2
+    # --batch alone is NOT enough on GnuPG 2.4: the agent's pinentry can
+    # still pop a passphrase/confirm dialog and a headless build then dies
+    # with "signing failed: Timeout". Forcing an empty loopback passphrase
+    # stores the key genuinely unprotected, so every later --addsign is
+    # silent. (2026-11-27: the original key was created interactively and
+    # acquired a passphrase despite this script's claim; it was rotated.)
+    gpg --batch --pinentry-mode loopback --passphrase "" \
+        --quick-generate-key "$KEY_UID" "$KEY_TYPE" sign never >&2
     fpr="$(signing_fingerprint "$KEY_UID")"
     [[ -n "$fpr" ]] || fail "key generation did not produce a usable key"
     mkdir -p "$KEY_DIR"

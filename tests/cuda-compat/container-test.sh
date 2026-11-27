@@ -75,7 +75,7 @@ RUN for f in /usr/share/dnf5/repos.d/*.repo /etc/yum.repos.d/*.repo; do \
     done
 RUN dnf -y --setopt=tsflags=noscripts --setopt=install_weak_deps=False \\
         install /rpms/*.rpm \\
- && dnf -y --setopt=install_weak_deps=False install gcc make python3 binutils elfutils \\
+ && dnf -y --setopt=install_weak_deps=False install gcc make cmake python3 binutils elfutils \\
  && dnf clean all && rm -rf /rpms
 ENV LD_LIBRARY_PATH=/usr/local/musa/lib
 WORKDIR /work
@@ -134,6 +134,66 @@ for t in cuda-fp16 cuda-streams; do
         bad "$t did not build"
     fi
 done
+
+echo "--- musify-text: installed tool + musified run on the GPU ---"
+if [[ -x /usr/bin/musify-text ]]; then
+    mkdir -p /work/port
+    if musify-text --rename-ext --strict -o /work/port /tests/cuda-vector-add.cu; then
+        ok "musify-text converted with zero CUDA-token residue"
+    else
+        bad "musify-text --strict conversion failed"
+    fi
+    if mcc -O2 -x musa --offload-arch=mp_10 -I/usr/local/musa-5.2/include \
+            -include /usr/lib64/musa-cuda-compat/include/musa_rt154_names.h \
+            /work/port/cuda-vector-add.mu -L/usr/local/musa/lib \
+            -Wl,-rpath,/usr/local/musa/lib -lmusart -lmusa -o /work/musified; then
+        out="$(timeout 120 /work/musified 2>&1)" || true
+        if printf "%s" "$out" | grep -q "VADD_STATUS: PASS"; then
+            ok "musified CUDA source built with mcc and ran on the S30"
+        else
+            bad "musified run failed: ${out: -120}"
+        fi
+    else
+        bad "mcc could not build the musified source"
+    fi
+else
+    bad "musify-text not installed at /usr/bin/musify-text"
+fi
+
+echo "--- CMake: find_package(MUSA) from the installed config ---"
+if command -v cmake >/dev/null && [[ -f /usr/lib64/cmake/musa/MUSAConfig.cmake ]]; then
+    mkdir -p /work/cminst
+    cp /work/port/cuda-vector-add.mu /work/cminst/kernel.mu 2>/dev/null || true
+    if [[ -f /work/cminst/kernel.mu ]]; then
+        cat >/work/cminst/CMakeLists.txt <<CMK
+cmake_minimum_required(VERSION 3.16)
+project(cminst CXX)
+find_package(MUSA REQUIRED)
+musa_add_executable(cmvadd kernel.mu)
+CMK
+        if cmake -S /work/cminst -B /work/cminst/build >/work/cminst/cfg.log 2>&1 \
+                && cmake --build /work/cminst/build >>/work/cminst/cfg.log 2>&1; then
+            if grep -q "Found MUSA" /work/cminst/cfg.log; then
+                ok "find_package(MUSA) resolved from /usr/lib64/cmake/musa"
+            else
+                bad "configured without reporting Found MUSA"
+            fi
+            out="$(timeout 120 /work/cminst/build/musa/cmvadd 2>&1)" || true
+            if printf "%s" "$out" | grep -q "VADD_STATUS: PASS"; then
+                ok "musa_add_executable binary ran on the S30"
+            else
+                bad "installed-layout CMake run failed: ${out: -120}"
+            fi
+        else
+            bad "installed-layout CMake gate failed"
+            tail -8 /work/cminst/cfg.log
+        fi
+    else
+        bad "no musified kernel for the CMake gate"
+    fi
+else
+    bad "cmake or /usr/lib64/cmake/musa/MUSAConfig.cmake missing"
+fi
 
 echo "--- name coverage audit ---"
 python3 /tests/cuda-compat/gen-cuda-compat.py --print-audit | head -3

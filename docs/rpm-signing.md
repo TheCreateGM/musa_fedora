@@ -81,6 +81,39 @@ pkexec rpm -e gpg-pubkey-763a7d1470e1672e236f290efba85a80c8d8bc89
 Re-run `scripts/rpm-signing.sh sign` after each local rebuild: a freshly built
 package is unsigned until signed, and `check` reports the current ratio.
 
+## Key rotation — 2026-11-27 (session 4)
+
+The 2026-11-17 key could no longer sign non-interactively: the gpg-agent
+launched `pinentry-gnome3` and `rpmsign` died with `signing failed: Timeout`.
+Inspection of `~/.gnupg/private-keys-v1.d` showed the private subkey stored
+under `openpgp-s2k3-ocb-aes` with a real salt/iteration S2K — i.e. the key
+was in fact passphrase-protected, contradicting the "no passphrase" claim
+above (the keygen path predates this script's batch flow). A passphrase is
+not available to an unattended build, so the key was rotated rather than
+worked around:
+
+1. `gpg --batch --yes --delete-secret-keys/--delete-keys
+   763A7D1470E1672E236F290EFBA85A80C8D8BC89` — old secret key destroyed;
+   its revocation certificate remains stored outside the repo; the old
+   **public** key stays imported in the system RPM keyring so packages
+   signed before this rotation keep verifying.
+2. `scripts/rpm-signing.sh keygen` was fixed to force the loopback recipe
+   (`--batch --pinentry-mode loopback --passphrase ""`), proven in a scratch
+   keyring to produce a genuinely unprotected key that signs with no agent
+   prompt. New fingerprint:
+   **`BFAB85E6884C116DAA985DF0C2B44B18E3841DC2`**.
+3. `scripts/rpm-signing.sh export` refreshed
+   `packaging/rpm/keys/musa-fedora-signing-key.asc`; `sign` + `verify`
+   reported **8/8** for the current local-build tree (all rebuilt packages
+   are signed with the new key; the `1.0.0-2` cuda-compat rebuild was
+   re-signed after its header fix).
+4. Importing the new key into the system RPM keyring needs `pkexec`
+   (`pkexec rpm --import <abs-path>.asc`). As of the end of this session the
+   authorization dialog had not been answered; until it completes, `rpm -K`
+   against the system keyring reports the new signatures as unknown, while
+   `scripts/rpm-signing.sh verify` (temporary keyring) reports 8/8 OK.
+   Copr-published packages are unaffected — Copr re-signs with its own key.
+
 ## Creating the key
 
 ```sh

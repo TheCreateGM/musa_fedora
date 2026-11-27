@@ -5,7 +5,7 @@
 
 Name:           musa-cuda-compat
 Version:        1.0.0
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        CUDA source compatibility layer for the MUSA runtime (MTT S30)
 
 License:        MIT
@@ -25,6 +25,7 @@ Requires:       musa-runtime = 1.5.4
 Requires:       musa-sdk >= 5.2.0
 Requires:       gcc
 Requires:       glibc
+Requires:       python3
 
 %description
 A CUDA source-compatibility layer for the Moore Threads MUSA runtime on
@@ -37,8 +38,15 @@ It lets unmodified CUDA source build and run on an MTT S30:
 * an nvcc-compatible driver (bin/nvcc) that translates an nvcc command line
   into an mcc invocation for the real device (mp_10), so CMake's CUDA
   language support, Meson and plain Makefiles work;
-* libcudart / libcuda jump shims whose entry points tail-call the MUSA 1.5.4
-  runtime and driver API, so pre-linked CUDA objects resolve too.
+* libcudart / libcuda jump shims whose entry points tail-call the MUSA
+  1.5.4
+  runtime and driver API, so pre-linked CUDA objects resolve too;
+* musify-text: a CUDA<->MUSA source porting tool whose name table is derived
+  from these same export-verified maps, with an honest report of anything it
+  cannot map;
+* CMake discovery: find_package(MUSA) (package mode and module mode) with
+  musa_add_executable / musa_add_library helpers that drive mcc against the
+  validated 5.2.0 compiler + 1.5.4 runtime pair for the MTT S30 (mp_10).
 
 This is a source-compatibility layer, not an emulator: kernels are compiled by
 mcc for the S30 and library calls land on real runtime symbols. Only the
@@ -62,12 +70,24 @@ printf '/* device runtime placeholder: MUSA bundles device code in mcc */\n' >cu
 gcc -O2 -fPIC -shared -o libcudadevrt.so cudadevrt.c -Wl,-soname,libcudadevrt.so
 
 %install
-mkdir -p %{buildroot}%{_libdir}/%{name}/{bin,include,lib64,nvvm/libdevice}
+mkdir -p %{buildroot}%{_libdir}/%{name}/{bin,include,lib64,cmake,nvvm/libdevice}
 install -m 0755 bin/nvcc bin/cuda-config bin/nvlink bin/fatbinary \
     %{buildroot}%{_libdir}/%{name}/bin/
+install -m 0755 bin/musify-text %{buildroot}%{_libdir}/%{name}/bin/
 install -m 0644 include/*.h %{buildroot}%{_libdir}/%{name}/include/
 install -m 0755 libcudart.so.11.0 libcuda.so.1 \
     %{buildroot}%{_libdir}/%{name}/lib64/
+
+# CMake discovery: package mode via the standard search dir (find_package
+# (MUSA) and find_package(MUSA 1.5) resolve without any module-path edits),
+# plus the same module for ports that append it to CMAKE_MODULE_PATH the
+# vendor way.
+mkdir -p %{buildroot}%{_libdir}/cmake/musa
+install -m 0644 cmake/FindMUSA.cmake cmake/MUSAConfig.cmake \
+    cmake/MUSAConfigVersion.cmake %{buildroot}%{_libdir}/cmake/musa/
+install -m 0644 cmake/FindMUSA.cmake %{buildroot}%{_libdir}/%{name}/cmake/
+mkdir -p %{buildroot}%{_bindir}
+ln -s ../lib64/%{name}/bin/musify-text %{buildroot}%{_bindir}/musify-text
 
 # Convenience aliases inside the compat root.
 ln -s libcudart.so.11.0 %{buildroot}%{_libdir}/%{name}/lib64/libcudart.so.11
@@ -109,6 +129,8 @@ install -d %{buildroot}%{_mandir}/man1
 
 %files
 %doc README.md include/musa_cuda_compat_base.h
+%{_bindir}/musify-text
+%{_libdir}/cmake/musa/
 %{_libdir}/%{name}/
 %{_libdir}/libcudart.so.11.0
 %{_libdir}/libcudart.so.11
@@ -121,6 +143,18 @@ install -d %{buildroot}%{_mandir}/man1
 %{_mandir}/man1/musa-cuda-compat.1.gz
 
 %changelog
+* Fri Nov 27 2026 MUSA Fedora Team <musa@fedoraproject.org> - 1.0.0-2
+- Add musify-text: CUDA<->MUSA source porting tool driven by the generated
+  export-verified name maps; reports unmapped CUDA tokens and the entry
+  points that need the runtime-ABI pin (no silent failures by design).
+- Add CMake discovery: MUSAConfig.cmake package-mode files under
+  %{_libdir}/cmake/musa plus FindMUSA module, so find_package(MUSA) and
+  musa_add_executable/musa_add_library build MUSA-named sources against the
+  validated 5.2.0 compiler + 1.5.4 runtime split (S30: mp_10).
+- Ship generated musa_rt154_names.h: force-included by the CMake module to
+  undo SDK header version renames (musaGetDeviceProperties -> _v2 and the
+  eight mu* renames) whose targets the 1.5.4 runtime does not export.
+
 * Thu Nov 26 2026 MUSA Fedora Team <musa@fedoraproject.org> - 1.0.0-1
 - Initial package. Generated CUDA-to-MUSA header maps for the subset of the
   CUDA API the 1.5.4 runtime exports, the nvcc-compatible mcc driver, and

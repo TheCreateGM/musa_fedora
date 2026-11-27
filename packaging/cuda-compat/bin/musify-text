@@ -1,0 +1,376 @@
+#!/usr/bin/env python3
+"""musify-text — CUDA <-> MUSA source porting tool (musa-cuda-compat).
+
+SPDX-License-Identifier: MIT
+Part of musa-cuda-compat (https://github.com/TheCreateGM/musa_fedora).
+
+Rewrites plain CUDA source into MUSA source (direction c2m) or back (m2c)
+for the validated Fedora S30 stack: mtgpu 3.1.0 + MUSA runtime 1.5.4 +
+MUSA 5.2.0 mcc targeting mp_10.
+
+The vendor tool (`musify-text` from Moore Threads' tutorial_on_musa) and the
+torch_musa porting helpers (BSD-3-Clause, Moore Threads) apply substring
+keyword maps. This implementation follows the same intent but is written for
+this stack and derives its authoritative name table from the generated
+CUDA->MUSA maps of the installed musa-cuda-compat layer
+(musa_cuda_map_runtime.h / musa_cuda_map_driver.h). Those maps contain only
+entry points the MUSA 1.5.4 runtime actually exports, so the tool never
+silently invents a mapping the linker cannot satisfy.
+
+Rules (c2m), longest-match-first, single pass:
+  * exact renames for every name pair in the generated maps;
+  * family renames verified against the 4020 map pairs (all but two are
+    literal cuda->musa / CUDA->MUSA prefix rewrites):
+      cuda->musa, CUDA->MUSA (substring; covers cudart, libcudart,
+        libcuda, cuda_runtime.h, __CUDACC__, CUDA_VERSION, ...),
+      cuuint->muuint, cu(?=[A-Z])->mu, CU(?=[A-Za-z_])->MU (word start),
+      cublas/cudnn/curand/cufft/cusolver/cusparse/cupti->mu*, CUPTI->MUPTI,
+      cubin->mubin, nvcc->mcc, NVCC->MCC, HGPUNV->HGPUMT,
+      sm_<n>/compute_<n> -> mp_10 (every arch spelling collapses on S30);
+  * m2c applies the mirror rules (arch collapse is lossy and NOT undone;
+    mp_10 stays as written).
+
+After conversion the tool reports:
+  * how many identifiers remain CUDA-only, and
+  * rewritten names that the 1.5.4 runtime does not export (these compile
+    but will not link — no silent failure is introduced here).
+
+Usage:
+  musify-text --inplace $(rg --files -g '*.cu' -g '*.cuh' -g '*.cpp' src/)
+  musify-text -d m2c --inplace ported/*.mu
+  musify-text -o outdir src/kernel.cu            # writes outdir/kernel.cu
+  musify-text --rename-ext -o outdir src/*.cu    # kernel.cu -> kernel.mu
+
+Options:
+  -d {c2m,m2c}      direction (default c2m)
+  -o DIR            write results to DIR (original file names unless
+                    --rename-ext); without -o/--inplace: stdout for one file
+  --inplace         rewrite files in place (creates FILE.musify-bak once)
+  --rename-ext      with -o or --inplace: .cu->.mu, .cuh->.muh (c2m) and the
+                    inverse (m2c)
+  --map-dir DIR     directory with musa_cuda_map_*.h (default $CUDA_HOME/include,
+                    then /usr/local/cuda/include; absence only disables exact
+                    map rules, family rules still apply)
+  --rules FILE.json extra {src: dst} word-boundary pairs (e.g. the
+                    torch_musa mapping/general.json; see caveats below)
+  --quiet           no report
+  --strict          exit 3 when the output still contains CUDA-only tokens
+
+m2c caveats: only files ported *by this tool* should be converted back;
+identifiers that legitimately start with mu/MU (muForce, MU_CFG) are rewritten
+by the mirror rules exactly as the vendor's inverse table would rewrite them.
+"""
+import argparse
+import json
+import os
+import re
+import sys
+
+# ---------------------------------------------------------------- rule tables
+# Family rules. kind: 'sub' = plain substring (identifier-internal rewrites
+# happen, like the vendor tool); 'word' = at a word start with the shown
+# lookahead; pairs are (regex-pattern, replacement) in application order —
+# the engine below resolves overlaps by earliest-then-longest match, so all
+# rules compete correctly in a single pass.
+FAMILY_C2M = [
+    ("sub", "cuda", "musa"),
+    ("sub", "CUDA", "MUSA"),
+    ("sub", "cuuint", "muuint"),
+    ("sub", "cublas", "mublas"),
+    ("sub", "cudnn", "mudnn"),
+    ("sub", "curand", "murand"),
+    ("sub", "cufft", "mufft"),
+    ("sub", "cusolver", "musolver"),
+    ("sub", "cusparse", "musparse"),
+    ("sub", "cupti", "mupti"),
+    ("sub", "CUPTI", "MUPTI"),
+    ("sub", "cubin", "mubin"),
+    ("sub", "nvcc", "mcc"),
+    ("sub", "NVCC", "MCC"),
+    ("sub", "HGPUNV", "HGPUMT"),
+    ("word", r"cu(?=[A-Z])", "mu"),
+    ("word", r"CU(?=[A-Za-z_])", "MU"),
+]
+FAMILY_M2C = [
+    ("sub", "musa", "cuda"),
+    ("sub", "MUSA", "CUDA"),
+    ("sub", "muuint", "cuuint"),
+    ("sub", "mublas", "cublas"),
+    ("sub", "mudnn", "cudnn"),
+    ("sub", "murand", "curand"),
+    ("sub", "mufft", "cufft"),
+    ("sub", "musolver", "cusolver"),
+    ("sub", "musparse", "cusparse"),
+    ("sub", "mupti", "cupti"),
+    ("sub", "MUPTI", "CUPTI"),
+    ("sub", "mubin", "cubin"),
+    ("sub", "HGPUMT", "HGPUNV"),
+    ("word", r"mu(?=[A-Z])", "cu"),
+    ("word", r"MU(?=[A-Za-z_])", "CU"),
+    # mcc -> nvcc only as a whole word; \b keeps mccarthy-style names safe.
+    ("word", r"mcc(?![A-Za-z0-9_])", "nvcc"),
+    ("word", r"MCC(?![A-Za-z0-9_])", "NVCC"),
+]
+# Architecture collapse, c2m only (m2c cannot recover the original sm_*).
+ARCH_C2M = [
+    ("word", r"sm_[0-9]+", "mp_10"),
+    ("word", r"compute_[0-9]+", "mp_10"),
+]
+
+EXT_C2M = {".cu": ".mu", ".cuh": ".muh"}
+EXT_M2C = {v: k for k, v in EXT_C2M.items()}
+
+# Tokens that must not survive a c2m conversion (report, and --strict fails).
+CUDA_RESIDUE = re.compile(
+    r"\b(?:cuda[A-Za-z0-9_]*|CUDA[A-Za-z0-9_]*|cu[A-Z][A-Za-z0-9_]*|"
+    r"CU[A-Za-z_][A-Za-z0-9_]*|nv(?:rtc|link|tx|jit|prof|cc|vtune)[A-Za-z0-9_]*|"
+    r"libcuda[a-zA-Z0-9_.]*|sm_[0-9]+|compute_[0-9]+)\b")
+# Driver/library entry points that look callable (used for the export audit).
+# Deliberately conservative: musaFoo / muFoo / MUSA_FOO / MU_FOO / MUSART*,
+# so prose words like "MUSA" in comments are not reported.
+API_TOKEN = re.compile(
+    r"\b(?:musa[A-Z][A-Za-z0-9_]*|mu[A-Z][A-Za-z0-9_]*|"
+    r"MUSA_[A-Za-z0-9_]+|MUSART\b|MUSART_|MU_[A-Za-z0-9_]+|"
+    r"MU(?!S)[A-Z][A-Za-z0-9_]+)\b")
+
+
+def load_map_pairs(map_dir):
+    """Parse the generated compat maps: yields (cuda_name, musa_name)."""
+    pairs = []
+    for fn in ("musa_cuda_map_runtime.h", "musa_cuda_map_driver.h"):
+        path = os.path.join(map_dir, fn)
+        if not os.path.isfile(path):
+            continue
+        with open(path, errors="replace") as f:
+            for line in f:
+                m = re.match(r"#define (\w+) (\w+)\s*$", line)
+                if m and not m.group(1).startswith("MUSA_CUDA_MAP"):
+                    pairs.append((m.group(1), m.group(2)))
+    return pairs
+
+
+class Transformer:
+    """Single-pass rewriter: earliest start wins; at equal start the longest
+    match wins, explicit map keys beating family rules at equal length. This
+    mirrors the vendor keyword-tree semantics without a third-party
+    Aho-Corasick dependency."""
+
+    def __init__(self, pairs, extra_pairs=()):
+        self.keys = {}          # identifier -> replacement
+        for src, dst in pairs:
+            self.keys.setdefault(src, dst)
+        for src, dst in extra_pairs:
+            self.keys.setdefault(src, dst)
+        self.word_alts = [
+            (re.compile(r"\b%s\b" % re.escape(key)), dst, 2)
+            for key, dst in sorted(self.keys.items(), key=lambda kv: -len(kv[0]))
+        ]
+        self.fams = []
+
+    def compile_rules(self, triples):
+        self.fams = []
+        for kind, pat, repl in triples:
+            if kind == "sub":
+                rx = re.compile(re.escape(pat))
+            else:
+                rx = re.compile(r"(?<![0-9A-Za-z_])" + pat)
+            self.fams.append((rx, repl, 1))
+
+    def transform(self, text):
+        hits = []  # (start, -length, order, replacement)
+        for rx, repl, order in self.word_alts:
+            for m in rx.finditer(text):
+                hits.append((m.start(), -(m.end() - m.start()), order, repl))
+        for rx, repl, order in self.fams:
+            for m in rx.finditer(text):
+                hits.append((m.start(), -(m.end() - m.start()), order, repl))
+        hits.sort(key=lambda h: (h[0], h[1], -h[2]))
+        out = []
+        pos = 0
+        for start, neglen, _order, repl in hits:
+            end = start - neglen
+            if end <= pos:
+                continue
+            out.append(text[pos:start])
+            out.append(repl)
+            pos = end
+        out.append(text[pos:])
+        return "".join(out)
+
+
+def build_transformer(direction, pairs, extra):
+    t = Transformer(pairs if direction == "c2m" else [(b, a) for a, b in pairs],
+                    extra_pairs=extra if direction == "c2m"
+                    else [(b, a) for a, b in extra])
+    if direction == "c2m":
+        t.compile_rules(FAMILY_C2M + ARCH_C2M)
+    else:
+        t.compile_rules(FAMILY_M2C)
+    return t
+
+
+def exported_names(pairs, extra):
+    """The set of MUSA-side names known to exist (map targets + extras)."""
+    return {b for _, b in pairs} | {b for _, b in extra}
+
+
+def load_rt154_renames(map_dir):
+    """Entry points the SDK header version-renames but 1.5.4 exports plain.
+    Source that calls them needs -include musa_rt154_names.h (musa-
+    add_executable does this automatically)."""
+    names = set()
+    if not map_dir:
+        return names
+    path = os.path.join(map_dir, "musa_rt154_names.h")
+    if os.path.isfile(path):
+        with open(path, errors="replace") as f:
+            for line in f:
+                m = re.match(r"#undef (\w+)\s*$", line)
+                if m:
+                    names.add(m.group(1))
+    return names
+
+
+def audit_output(text, direction, exported, src_text=""):
+    """Return (residual CUDA tokens, rewritten-but-unexported tokens).
+    Only tokens the conversion itself produced are audit candidates, so
+    pre-existing prose like "MUSA" in a comment does not pollute the report."""
+    residue = sorted(set(CUDA_RESIDUE.findall(text))) if direction == "c2m" else []
+    unexported = []
+    if direction == "c2m":
+        preexisting = set(API_TOKEN.findall(src_text))
+        for m in API_TOKEN.finditer(text):
+            tok = m.group(0)
+            if tok in exported or tok in preexisting:
+                continue
+            nxt = text[m.end():m.end() + 1]
+            if nxt == "(" or tok.endswith("_t") or tok[0].isupper():
+                unexported.append(tok)
+    return residue, sorted(set(unexported))
+
+
+def rewrite_path_ext(path, direction, rename_ext):
+    if not rename_ext:
+        return path
+    base, ext = os.path.splitext(path)
+    table = EXT_C2M if direction == "c2m" else EXT_M2C
+    return base + table.get(ext, ext)
+
+
+def main():
+    ap = argparse.ArgumentParser(
+        prog="musify-text", add_help=True,
+        description="CUDA <-> MUSA source porting for the validated Fedora "
+                    "S30 stack (musa-cuda-compat).")
+    ap.add_argument("-d", "--direction", choices=("c2m", "m2c"), default="c2m")
+    g = ap.add_mutually_exclusive_group()
+    g.add_argument("-o", metavar="DIR", dest="outdir")
+    g.add_argument("--inplace", action="store_true")
+    ap.add_argument("--rename-ext", action="store_true")
+    ap.add_argument("--map-dir")
+    ap.add_argument("--rules", metavar="FILE.json")
+    ap.add_argument("--quiet", action="store_true")
+    ap.add_argument("--strict", action="store_true")
+    ap.add_argument("--version", action="version", version="musify-text 1.0.0 "
+                    "(musa-cuda-compat, S30/mp_10, runtime 1.5.4)")
+    ap.add_argument("files", nargs="+")
+    args = ap.parse_args()
+
+    map_dir = args.map_dir
+    if not map_dir:
+        for cand in (os.path.join(os.environ.get("CUDA_HOME", "/usr/local/cuda"),
+                                  "include"),
+                     "/usr/local/cuda/include",
+                     "/usr/lib64/musa-cuda-compat/include"):
+            if os.path.isdir(cand):
+                map_dir = cand
+                break
+    pairs = load_map_pairs(map_dir) if map_dir else []
+    extra = []
+    if args.rules:
+        try:
+            with open(args.rules) as f:
+                data = json.load(f)
+            extra = [(str(k), str(v)) for k, v in data.items() if k != v]
+        except (OSError, ValueError) as e:
+            print("musify-text: cannot read rules file %s: %s" % (args.rules, e),
+                  file=sys.stderr)
+            return 2
+
+    t = build_transformer(args.direction, pairs, extra)
+    exported = exported_names(pairs, extra)
+    rt154_renames = load_rt154_renames(map_dir)
+
+    total_res = set()
+    total_unexp = set()
+    total_pin = set()
+    counts = {"files": 0, "changed": 0, "rules": len(pairs) + len(extra)}
+    errors = 0
+
+    for path in args.files:
+        try:
+            with open(path, errors="replace") as f:
+                src = f.read()
+        except OSError as e:
+            print("musify-text: %s: %s" % (path, e), file=sys.stderr)
+            errors += 1
+            continue
+        dst_text = t.transform(src)
+        counts["files"] += 1
+        if dst_text != src:
+            counts["changed"] += 1
+        residue, unexp = audit_output(dst_text, args.direction, exported, src)
+        total_res.update(residue)
+        total_unexp.update(unexp)
+        if args.direction == "c2m" and rt154_renames:
+            for n in rt154_renames:
+                if re.search(r"\b" + n + r"\s*\(", dst_text):
+                    total_pin.add(n)
+        out_path = rewrite_path_ext(path, args.direction, args.rename_ext)
+        if args.outdir:
+            out_path = os.path.join(args.outdir, os.path.basename(out_path))
+            os.makedirs(args.outdir, exist_ok=True)
+            with open(out_path, "w") as f:
+                f.write(dst_text)
+        elif args.inplace:
+            bak = path + ".musify-bak"
+            if not os.path.exists(bak):
+                with open(bak, "w") as f:
+                    f.write(src)
+            with open(path, "w") as f:
+                f.write(dst_text)
+            if out_path != path:
+                os.replace(path, out_path)
+        else:
+            sys.stdout.write(dst_text)
+
+    if not args.quiet:
+        print("musify-text: %d file(s), %d changed (%s, %d map rules%s)"
+              % (counts["files"], counts["changed"], args.direction,
+                 counts["rules"], " +extra" if extra else ""),
+              file=sys.stderr)
+        if total_res:
+            shown = ", ".join(list(total_res)[:12])
+            more = "" if len(total_res) <= 12 else " (+%d more)" % (len(total_res) - 12)
+            print("musify-text: %d CUDA-only token set(s) remain, e.g. %s%s"
+                  % (len(total_res), shown, more), file=sys.stderr)
+        if total_unexp:
+            shown = ", ".join(list(total_unexp)[:12])
+            more = "" if len(total_unexp) <= 12 else " (+%d more)" % (len(total_unexp) - 12)
+            print("musify-text: %d rewritten name(s) are not exported by the "
+                  "MUSA 1.5.4 runtime (compile will pass, link may not): %s%s"
+                  % (len(total_unexp), shown, more), file=sys.stderr)
+        if total_pin:
+            print("musify-text: %d entry point(s) need the runtime-ABI pin: "
+                  "build with 'mcc -include musa_rt154_names.h' (or use "
+                  "musa_add_executable, which adds it): %s"
+                  % (len(total_pin), ", ".join(sorted(total_pin))),
+                  file=sys.stderr)
+
+    if args.strict and args.direction == "c2m" and total_res:
+        return 3
+    return 1 if errors else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

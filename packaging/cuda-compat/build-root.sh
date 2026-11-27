@@ -29,6 +29,9 @@ install -m 0755 "$HERE/bin/nvcc" "$OUT/bin/nvcc"
 install -m 0755 "$HERE/bin/cuda-config" "$OUT/bin/cuda-config"
 install -m 0755 "$HERE/bin/nvlink" "$OUT/bin/nvlink"
 install -m 0755 "$HERE/bin/fatbinary" "$OUT/bin/fatbinary"
+install -m 0755 "$HERE/bin/musify-text" "$OUT/bin/musify-text"
+mkdir -p "$OUT/cmake"
+install -m 0644 "$HERE"/cmake/*.cmake "$OUT/cmake/"
 install -m 0644 "$HERE"/include/*.h "$OUT/include/"
 
 # Jump shims: cudaX -> musaX, cuX -> muX. ABI-identical tail calls generated

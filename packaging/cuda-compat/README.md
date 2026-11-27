@@ -13,6 +13,29 @@ WHAT YOU GET
   /usr/local/cuda/include/cuda*.h     CUDA headers mapping onto MUSA
   /usr/local/cuda/lib64/libcudart.so  cudaX -> musaX jump shim
   /usr/local/cuda/lib64/libcuda.so    cuX/MUX -> muX jump shim
+  /usr/bin/musify-text                CUDA<->MUSA source porting tool
+  /usr/lib64/cmake/musa/              find_package(MUSA) config + module
+  /usr/lib64/musa-cuda-compat/include/musa_rt154_names.h
+                                      runtime-ABI pin for MUSA-named source
+
+PORTING WITH musify-text
+  musify-text --rename-ext --strict -o port src/kernel.cu
+  musify-text -d m2c --inplace ported-file.mu
+  Its name table is loaded from the generated maps, so every rewrite it
+  performs is a rename the 1.5.4 runtime actually exports; anything it cannot
+  map is reported, never invented. Use the --strict flag to fail when
+  CUDA-only tokens survive, and heed the pin note: sources that call
+  musaGetDeviceProperties (or any renamed entry point) need
+  '-include musa_rt154_names.h' passed to mcc.
+
+CMAKE
+  find_package(MUSA REQUIRED)         package mode, no hints needed once the
+                                      RPM is installed (/usr/lib64/cmake/musa)
+  musa_add_executable(app src/kernel.mu)
+  musa_add_library(app_shared src/kern.mu)
+  The module searches MUSA_HOME/musa-runtime roots, pins the offload target
+  to mp_10 for the S30, links ONLY the 1.5.4 runtime, and force-includes
+  musa_rt154_names.h so MUSA-named callers hit the exported symbol names.
 
 BUILD A PROGRAM
   nvcc -O2 -o app app.cu
@@ -42,6 +65,10 @@ FILES
   include/musa_cuda_map_runtime.h   generated cudaX -> musaX map
   include/musa_cuda_map_driver.h    generated cuX/MUX -> muX map
   include/musa_cuda_undef_*.h       header renames undone before inclusion
+  include/musa_rt154_names.h        renames undone AFTER inclusion (MUSA names)
+  bin/musify-text                   source porting tool (stdlib Python)
+  cmake/FindMUSA.cmake              module-mode discovery + mcc build helpers
+  cmake/MUSAConfig*.cmake           package-mode discovery
   src/cudart_jumps.S                generated shim source
   run.sh                            hardware test suite (tests/cuda-compat)
 

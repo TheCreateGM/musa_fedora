@@ -131,6 +131,104 @@ else
     bad "audit script failed"
 fi
 
+note "== musify-text: CUDA -> MUSA porting, built and run on the GPU =="
+MUSIFY="$ROOT/bin/musify-text"
+MUSA_SDK="${MUSA_SDK:-/usr/local/musa-5.2}"
+if [[ -x "$MUSIFY" ]]; then
+    PORT="$WORK/port"; mkdir -p "$PORT"
+    if "$MUSIFY" --map-dir "$ROOT/include" --rename-ext --strict \
+            -o "$PORT" "$HERE/cuda-streams.cu" >"$WORK/musify.log" 2>&1; then
+        ok "musify-text: converted with zero CUDA-token residue (--strict)"
+    else
+        bad "musify-text conversion/strict check failed"
+        sed 's/^/        /' "$WORK/musify.log" | head -6
+    fi
+    if "$MUSIFY" -d m2c --map-dir "$ROOT/include" -o "$WORK/back" \
+            "$PORT/cuda-streams.mu" >/dev/null 2>&1 \
+            && cmp -s "$HERE/cuda-streams.cu" "$WORK/back/cuda-streams.mu"; then
+        ok "musify-text: m2c round-trip is byte-identical"
+    else
+        bad "musify-text: m2c round-trip differs"
+    fi
+    if [[ -x "$MUSA_SDK/bin/mcc" ]]; then
+        for tcase in "cuda-streams.cu:STREAM:STREAM_STATUS: PASS" \
+                     "cuda-vector-add.cu:VADD:VADD_STATUS: PASS"; do
+            src="${tcase%%:*}"; rest="${tcase#*:}"
+            stem="${rest%%:*}"; expect="${rest#*:}"
+            mu="$PORT/${src%.cu}.mu"
+            if ! "$MUSIFY" --map-dir "$ROOT/include" --rename-ext --strict \
+                    -o "$PORT" "$HERE/$src" >/dev/null 2>&1; then
+                bad "musify-text --strict failed on $src"
+                continue
+            fi
+            if "$MUSA_SDK/bin/mcc" -O2 -x musa --offload-arch=mp_10 \
+                    -I "$MUSA_SDK/include" \
+                    -include "$ROOT/include/musa_rt154_names.h" \
+                    "$mu" -L "$MUSA_RT/lib" \
+                    -Wl,-rpath,"$MUSA_RT/lib" -lmusart -lmusa \
+                    -o "$WORK/musified-$stem" >"$WORK/musified-$stem.build" 2>&1; then
+                if readelf -d "$WORK/musified-$stem" 2>/dev/null | grep -q 'libmusart\.so\.1\.5]'; then
+                    ok "musified $src links the 1.5.4 runtime (not the SDK's 5.x)"
+                else
+                    bad "musified $src does not NEEDED libmusart.so.1.5"
+                fi
+                out="$(LD_LIBRARY_PATH="$MUSA_RT/lib" timeout 120 "$WORK/musified-$stem" 2>&1)"
+                if [[ $? -eq 0 && "$out" == *"$expect"* ]]; then
+                    ok "musified $src ran on the S30"
+                else
+                    bad "musified $src run failed: ${out: -120}"
+                fi
+            else
+                bad "mcc failed on musified $src"
+                sed 's/^/        /' "$WORK/musified-$stem.build" | head -8
+            fi
+        done
+    else
+        skipped "mcc not found at $MUSA_SDK/bin/mcc"
+    fi
+else
+    skipped "no musify-text in compat root"
+fi
+
+note "== CMake: find_package(MUSA) + musa_add_executable on the GPU =="
+if command -v cmake >/dev/null 2>&1 && [[ -f "$ROOT/cmake/FindMUSA.cmake" ]]; then
+    CT="$WORK/cmtest"; mkdir -p "$CT"
+    cp "$PORT/cuda-vector-add.mu" "$CT/kernel.mu" 2>/dev/null \
+        || cp "$HERE/cuda-streams.cu" "$CT/kernel.mu"
+    cat >"$CT/CMakeLists.txt" <<EOF
+cmake_minimum_required(VERSION 3.16)
+project(musa_cmake_gate CXX)
+list(APPEND CMAKE_MODULE_PATH "$ROOT/cmake")
+find_package(MUSA REQUIRED)
+musa_add_executable(cmstream kernel.mu)
+EOF
+    if cmake -S "$CT" -B "$CT/build" -D MUSA_CUDA_COMPAT_ROOT="$ROOT" \
+            >"$WORK/cmake.log" 2>&1 \
+            && cmake --build "$CT/build" >>"$WORK/cmake.log" 2>&1; then
+        if grep -q 'Found MUSA' "$WORK/cmake.log"; then
+            ok "find_package(MUSA) located mcc + 1.5.4 runtime roots"
+        else
+            bad "find_package ran but never reported Found MUSA"
+        fi
+        if readelf -d "$CT/build/musa/cmstream" 2>/dev/null | grep -q 'libmusart\.so\.1\.5]'; then
+            ok "musa_add_executable linked libmusart.so.1.5"
+        else
+            bad "cmstream links the wrong runtime"
+        fi
+        out="$(LD_LIBRARY_PATH="$MUSA_RT/lib" timeout 120 "$CT/build/musa/cmstream" 2>&1)"
+        if [[ $? -eq 0 && "$out" == *VADD_STATUS:\ PASS* ]]; then
+            ok "musa_add_executable binary ran on the S30"
+        else
+            bad "cmstream run failed: ${out: -120}"
+        fi
+    else
+        bad "CMake gate failed to configure/build"
+        tail -12 "$WORK/cmake.log" | sed 's/^/        /'
+    fi
+else
+    skipped "cmake or the staged FindMUSA.cmake unavailable"
+fi
+
 echo
 printf 'Summary: %d passed, %d failed, %d skipped\n' "$pass" "$fail" "$skip"
 if ((fail)); then

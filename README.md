@@ -16,6 +16,27 @@ For the repair of the installed system's disk boot (GDM crash caused by the
 old base package shipping vendor Mesa DRI drivers), see
 [the 2026-11-23 boot fix](docs/boot-fix-2026-11-23.md).
 
+### Updates — 2026-11-27 (session 4: musify-text + CMake discovery)
+
+- **The CUDA-compatibility layer is now a full porting toolchain in
+  `musa-cuda-compat-1.0.0-2`.** New `/usr/bin/musify-text` ports CUDA source
+  to MUSA (name table derived from the export-verified generated maps; every
+  rewrite maps to a symbol MUSA 1.5.4 actually exports; `--strict` fails on
+  residual CUDA tokens; `m2c` round trip is byte-identical) and
+  `/usr/lib64/cmake/musa/` makes `find_package(MUSA)` +
+  `musa_add_executable(target kernel.mu)` work out of the box in module and
+  config mode — pinned to the validated split: `mcc` 5.2.0, runtime 1.5.4,
+  `mp_10`. A generated `musa_rt154_names.h` undoes the nine SDK versioned
+  renames (`musaGetDeviceProperties→_v2`, …) for MUSA-named callers.
+  Gates: `tests/cuda-compat/run.sh` **16/0/0** and
+  `tests/cuda-compat/container-test.sh` **16/0**, both hardware-run on the
+  S30 including a musified binary asserting `NEEDED libmusart.so.1.5`.
+  COPR builds 11397615/11397626 publish 1.0.0-2 in all five x86_64 chroots
+  of both projects; `verify-copr-chroots.sh` now asserts it (**24/24**).
+  The local signing key rotated (`BFAB85E6884C116DAA985DF0C2B44B18E3841DC2`)
+  after the old one proved passphrase-protected against headless use.
+  Record: [hardware-validation-2026-11-27-session4](docs/hardware-validation-2026-11-27-session4.md).
+
 ### Updates — 2026-11-27 (second pass: gate coverage + RPM signing)
 
 - **`verify-copr-chroots.sh` closed a coverage hole: 20/20 → 24/24.** The gate's
@@ -403,9 +424,14 @@ be restored with `scripts/compute-mode.sh disable`.
 7.3.4 module at 00:09 before the 00:11 boot, `vermagic 7.3.4-300.fc45.x86_64`),
 `mtgpu-firmware` 3.1.0-5, `musa-runtime` 1.5.4-8, `musa-runtime-va` 1.5.4-8,
 `musa-sdk` 5.2.0-7, `musa-toolkit` 3.1.0-6 (installed 00:10 UTC) and
-`musa-cuda-compat` 1.0.0-1. The 16 KiB system/SVM heap-page fix of 3.1.0-15 is
-in 3.1.0-16 as well. RPM signatures: all eight local-build RPMs are signed and
-the key is in the system ring (`rpm -K` → `digests signatures OK`), see
+`musa-cuda-compat` 1.0.0-1 (`1.0.0-2` is built, signed, and published in
+COPR; the host `dnf` upgrade needs a `pkexec` authorization that was
+unanswered at the end of the 2026-11-27 session-4 run). The 16 KiB
+system/SVM heap-page fix of 3.1.0-15 is
+in 3.1.0-16 as well. RPM signatures: all eight local-build RPMs are signed
+with the rotated key `BFAB85E6884C116DAA985DF0C2B44B18E3841DC2` and verify
+via `scripts/rpm-signing.sh verify`; the system-keyring import of the new
+key (`pkexec rpm --import …`) is pending the same authorization — see
 [rpm-signing](docs/rpm-signing.md). `musa-runtime-display` remains deliberately
 **not installed** — the vendor Mesa DRI drivers crash GNOME Shell here.
 
@@ -435,7 +461,7 @@ the capped test scope allows; OpenCL is absent). The table below records the
 | MUSA driver-API SONAME hygiene | **fixed 2026-11-26** | unowned 5.2.0 `/usr/lib64/libmusa.so.1` quarantined; `verify-musa.sh` now guards against a re-introduction |
 | Headless Vulkan | **verified, limited** | S30 device/queue, buffer allocation, and host-visible memory map passed; no rendering test |
 | Moore Threads OpenCL | **unavailable** | No MT ICD in the default loader; archived 2.1.1 ICD compute probe caused a kernel Oops (do not use) |
-| Copr publication | **verified 2026-11-27** | 10/10 chroots across both projects (five enabled in each, incl. `fedora-43` in `musa-fedora`) each publish all seven artifacts at dkms 3.1.0-16, firmware 3.1.0-5, **runtime family 1.5.4-8**, sdk 5.2.0-7, toolkit 3.1.0-6, cuda-compat 1.0.0-1; `scripts/verify-copr-chroots.sh` reports **24/24** checks and cross-checks its chroot map against the COPR API (it reported 20/20 over the older 9-chroot map on 2026-11-26, when `fedora-43` in `musa-fedora` was not yet asserted), and all 22 build logs of the runtime-1.5.4-8 submission were inspected with 0 errors — see [COPR verification](docs/copr-verification-2026-11-26.md), [the 11-25 one](docs/copr-verification-2026-11-25.md) and [objtool fallback](docs/objtool-fallback-2026-11-25.md); build success does not qualify driver loading |
+| Copr publication | **verified 2026-11-27** | 10/10 chroots across both projects (five enabled in each, incl. `fedora-43` in `musa-fedora`) each publish the full artifact set at dkms 3.1.0-16, firmware 3.1.0-5, **runtime family 1.5.4-8**, sdk 5.2.0-7, toolkit 3.1.0-6, cuda-compat 1.0.0-2 (musify-text + CMake discovery; builds 11397615/11397626); `scripts/verify-copr-chroots.sh` reports **24/24** checks and cross-checks its chroot map against the COPR API (it reported 20/20 over the older 9-chroot map on 2026-11-26, when `fedora-43` in `musa-fedora` was not yet asserted), and all 22 build logs of the runtime-1.5.4-8 submission were inspected with 0 errors — see [COPR verification](docs/copr-verification-2026-11-26.md), [the 11-25 one](docs/copr-verification-2026-11-25.md) and [objtool fallback](docs/objtool-fallback-2026-11-25.md); build success does not qualify driver loading |
 | Driver rebuild from source | **verified 2026-11-23** | `scripts/build-kernel-driver.sh` rebuilds `mtgpu` for `7.3.4-300.fc45.x86_64`; vermagic matches and the module aliases equal the installed module's |
 | Fedora 45 container + GPU test (2026-11-25 set) | **verified** | all seven RPMs installed in a throwaway Fedora 45 container with scriptlets disabled; `musaInfo`, vendor `muMemcpyTest` (1 GiB), `musart-smoke`, and an `mcc` `mp_10` vector-add ran on the S30: `13 passed, 0 failed` |
 | Historical Fedora container + GPU test (2026-11-17) | **verified** | the five-RPM set installed in a throwaway container and its packaged runtime and `mcc` ran on the S30: `13 passed, 0 failed` |

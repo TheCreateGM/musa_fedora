@@ -206,6 +206,17 @@ Evidence is recorded in
     the compile-only smoke test, including explicit `mp_10` output. No runtime
     or GPU call was made.
 
+17. Closed the CUDA-compatibility packaging gaps in session 4 (2026-11-27):
+    `musify-text` (export-derived CUDA↔MUSA porting tool, `/usr/bin`), CMake
+    discovery (`/usr/lib64/cmake/musa`: `find_package(MUSA)` config + module,
+    `musa_add_executable`/`musa_add_library` pinned to mcc 5.2.0 + libmusart
+    1.5.4 + mp_10), and the generated `musa_rt154_names.h` runtime-ABI pin.
+    Published as `musa-cuda-compat-1.0.0-2` on both COPR projects; hardware +
+    container gates 16/0/0 and 16/0; local signing key rotated
+    (`BFAB85E6884C116DAA985DF0C2B44B18E3841DC2`) after the old key proved
+    passphrase-protected against headless signing. Record:
+    `docs/hardware-validation-2026-11-27-session4.md`.
+
 ## Remaining work
 
 Updated 2026-11-27 — most items listed here historically are now done: the
@@ -217,6 +228,13 @@ the isolated container install test
 passes (13/0), VA-API decode works (14/0/0), compute mode is enabled across
 reboots, and LLM inference runs on the S30 via `apps/musa-infer` (see
 [docs/hardware-validation-2026-11-27-reverify.md](docs/hardware-validation-2026-11-27-reverify.md)).
+Later the same day the two open CUDA-compatibility packaging items were
+closed in `musa-cuda-compat-1.0.0-2`: `musify-text` and CMake discovery
+(`find_package(MUSA)`, `musa_add_executable`), both hardware-verified
+(`tests/cuda-compat` **16/0/0** host and **16/0** container; COPR builds
+11397615/11397626), and the local signing key was rotated to an genuinely
+unprotected batch key — see
+[docs/hardware-validation-2026-11-27-session4.md](docs/hardware-validation-2026-11-27-session4.md).
 The items below are the ones that remain open.
 
 ### 1. RPM OpenPGP signing — done 2026-11-27

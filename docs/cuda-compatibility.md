@@ -3,17 +3,25 @@
 Status: **mapped and hardware-verified for the subset the MUSA 1.5.4 runtime
 exports.** `musa-cuda-compat` 1.0.0 lets unmodified CUDA source build and run
 on an MTT S30 through the MUSA compiler and runtime. Nothing is emulated.
+Since release `1.0.0-2` the package also ships **`musify-text`** (CUDA↔MUSA
+source porting) and **CMake discovery** (`find_package(MUSA)`,
+`musa_add_executable`), both verified on hardware.
 
 - Hardware: MTT S30 `[1ed5:0102]`, `mtgpu` 3.1.0, MUSA runtime 1.5.4.
-- Verified: `tests/cuda-compat/run.sh` (7/7 on the S30) and
-  `tests/cuda-compat/container-test.sh` (12/12 in a disposable container with
-  device passthrough). See
-  [hardware-validation-2026-11-26-cuda-compat](hardware-validation-2026-11-26-cuda-compat.md).
+- Verified: `tests/cuda-compat/run.sh` (**16/16** on the S30, including the
+  musify and CMake gates) and
+  `tests/cuda-compat/container-test.sh` (**16/16** in a disposable container
+  with device passthrough, installed-RPM layout). See
+  [hardware-validation-2026-11-26-cuda-compat](hardware-validation-2026-11-26-cuda-compat.md)
+  and the 2026-11-27 session-4 logs.
 - Published: COPR `axogm/musa-fedora`
-  ([11393082](https://copr.fedorainfracloud.org/coprs/build/11393082/)) and
-  `axogm/musa-mtt-s30`
-  ([11393083](https://copr.fedorainfracloud.org/coprs/build/11393083/)), all
-  five x86_64 chroots.
+  ([11397615](https://copr.fedorainfracloud.org/coprs/build/11397615/) for
+  1.0.0-2; [11393082](https://copr.fedorainfracloud.org/coprs/build/11393082/)
+  for 1.0.0-1) and `axogm/musa-mtt-s30`
+  ([11397626](https://copr.fedorainfracloud.org/coprs/build/11397626/);
+  [11393083](https://copr.fedorainfracloud.org/coprs/build/11393083/)), all
+  five x86_64 chroots; `scripts/verify-copr-chroots.sh` asserts the 1.0.0-2
+  artifact set in every chroot of both projects (24/24, 2026-11-27).
 
 ## Why a generated layer, not a hand-written one
 
@@ -39,6 +47,13 @@ included before the vendor headers, and the runtime-era prototype is restored
 where the ABI differs, so a caller expecting the newer ABI gets a compile
 error instead of a silent argument mismatch.
 
+For MUSA-named source (what `musify-text` produces) the same undo runs
+*after* the vendor headers via `musa_rt154_names.h`: it `#undef`s the nine
+renamed entry points and re-declares the runtime-ABI prototypes inside
+`extern "C"`. The CMake module force-includes it, so
+`musaGetDeviceProperties` links against the plain symbol the 1.5.4 runtime
+exports instead of the never-shipped `_v2`.
+
 Regenerate on a host with the SDK installed:
 
 ```sh
@@ -61,6 +76,9 @@ make -C packaging/cuda-compat regen          # needs /usr/local/musa{,-5.2}
 | `cudaMemGetInfo`, `cuMemGetInfo` | yes |
 | CMake `LANGUAGES CUDA`, plain Makefiles, Meson via `CUDACXX` | yes |
 | `libcudart` / `libcuda` link names for pre-linked objects | yes |
+| `musify-text` c2m/m2c (strict, idempotent, byte-identical round trip) | yes |
+| musified `.mu` built by `mcc`, run on S30, linked `libmusart.so.1.5` | yes |
+| `find_package(MUSA)` module + config mode, `musa_add_executable`/`_library` | yes |
 
 ## What does not work
 
@@ -101,6 +119,22 @@ make -C build && ./build/app
 ```
 
 Include paths: `-I/usr/local/cuda/include`. Library paths: `-L/usr/local/cuda/lib64`.
+
+Source-porting path (no compat headers in the final build):
+
+```sh
+musify-text --rename-ext --strict -o port src/kernel.cu   # kernel.cu -> kernel.mu
+mcc -O2 --offload-arch=mp_10 -I/usr/local/musa-5.2/include \
+    -include /usr/lib64/musa-cuda-compat/include/musa_rt154_names.h \
+    port/kernel.mu -L/usr/local/musa/lib -lmusart -lmusa -o app
+```
+
+CMake discovery path (MUSA-named projects):
+
+```cmake
+find_package(MUSA REQUIRED)          # resolves from /usr/lib64/cmake/musa
+musa_add_executable(app src/kernel.mu)   # mcc + mp_10 + pinned 1.5.4 link
+```
 
 ## Why the 1.5.4 runtime and not 5.x
 

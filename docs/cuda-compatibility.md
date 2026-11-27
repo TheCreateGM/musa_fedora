@@ -1,34 +1,111 @@
-# CUDA compatibility notes (MTT S30 / MUSA Fedora)
+# CUDA source compatibility on the MTT S30
 
-This document describes **technically feasible** CUDA-compatibility paths for the validated MTT S30 MUSA stack. It does not claim binary CUDA compatibility or NVIDIA drop-in support.
+Status: **mapped and hardware-verified for the subset the MUSA 1.5.4 runtime
+exports.** `musa-cuda-compat` 1.0.0 lets unmodified CUDA source build and run
+on an MTT S30 through the MUSA compiler and runtime. Nothing is emulated.
 
-## Validated baseline
+- Hardware: MTT S30 `[1ed5:0102]`, `mtgpu` 3.1.0, MUSA runtime 1.5.4.
+- Verified: `tests/cuda-compat/run.sh` (7/7 on the S30) and
+  `tests/cuda-compat/container-test.sh` (12/12 in a disposable container with
+  device passthrough). See
+  [hardware-validation-2026-11-26-cuda-compat](hardware-validation-2026-11-26-cuda-compat.md).
+- Published: COPR `axogm/musa-fedora`
+  ([11393082](https://copr.fedorainfracloud.org/coprs/build/11393082/)) and
+  `axogm/musa-mtt-s30`
+  ([11393083](https://copr.fedorainfracloud.org/coprs/build/11393083/)), all
+  five x86_64 chroots.
 
-- Host: Fedora 45, kernel 7.3.4-300.fc45.x86_64, MTT S30 `[1ed5:0102]`, `mtgpu` 3.1.0.
-- Runtime: MUSA 1.5.4 (`/usr/local/musa`, `libmusart.so.1.5`).
-- Compiler/SDK: MUSA 5.2.0 (`/usr/local/musa-5.2`, `mcc`, `mp_10` target for S30/SuDi).
-- Verification: `verify-musa.sh --skip-memcpy` 15/0/2; container install+GPU passthrough 13/0.
+## Why a generated layer, not a hand-written one
 
-## What exists
+MUSA is a rename of the CUDA API: `cudaMalloc` → `musaMalloc`,
+`cuLaunchKernel` → `muLaunchKernel`, `CUdeviceptr` → `MUdeviceptr`. Two facts
+make a naive text substitution wrong on this stack:
 
-- **MUSA API**: CUDA-like runtime/driver APIs (`musa_runtime.h`, `musa.h`, device/driver types, streams, events, memory, kernels). MUSA programs compile with `mcc --offload-arch=mp_10`.
-- **MUSA SDK clang/cuda wrappers**: MUSA 5.2.0 includes clang CUDA wrapper headers under `/usr/local/musa-5.2/lib/clang/14.0.0/include` (e.g. `__clang_cuda_*`), used by the MUSA toolchain; this is not a guarantee of arbitrary CUDA source compatibility.
-- **Pkgconfig helpers (repo)**: `packaging/pkgconfig/musart.pc`, `packaging/pkgconfig/musa.pc` provide discovery for the validated 1.5.4 stack.
+1. **The SDK headers are newer than the runtime.** The 5.2.0 headers rename
+   entry points to versioned symbols (`musaGetDeviceProperties` →
+   `musaGetDeviceProperties_v2`) that the 1.5.4 runtime does **not** export.
+   Nine of those renames were found here; using the headers unchanged makes
+   every caller fail to link. Even worse, `muGetProcAddress_v2` and the five
+   `muGraph*KernelNode*_v2` names have **different prototypes**, so aliasing
+   them to the legacy symbol would compile and then corrupt arguments.
+2. **Many CUDA 11 entry points were never shipped in 1.5.4.** 251 runtime and
+   293 driver functions the headers declare have no symbol in the runtime
+   library.
 
-## Feasible compatibility paths
+So the maps are *generated* from the library's own export list
+(`packaging/cuda-compat/gen-cuda-compat.py`), and a name is only mapped when
+its target symbol exists. The versioned renames are undone in a header that is
+included before the vendor headers, and the runtime-era prototype is restored
+where the ABI differs, so a caller expecting the newer ABI gets a compile
+error instead of a silent argument mismatch.
 
-1. **Port CUDA source to MUSA**: use Moore Threads musify/porting tools where available, or manually map CUDA APIs/types to MUSA equivalents. Validate each port on S30 (`mp_10`).
-2. **Build against MUSA headers/libs**: compile `.mu`/MUSA C++ with `mcc`, link `-lmusart` (and driver libs as needed) against `/usr/local/musa`.
-3. **CMake/pkgconfig discovery**: use provided pkgconfig files; for CMake, add a Find/Config module that resolves MUSA_HOME and `mp_10` arch (future work).
-4. **Framework ports**: use MUSA-ported frameworks from `musa-data` (e.g. `torch_musa`) only after building/testing against the validated runtime/compiler and S30 hardware.
+Regenerate on a host with the SDK installed:
 
-## Not provided / not claimed
+```sh
+sudo dnf install -y musa-cuda-compat-devel   # not required, the sources are in the repo
+make -C packaging/cuda-compat regen          # needs /usr/local/musa{,-5.2}
+```
 
-- No drop-in NVIDIA `libcuda.so`, `libcudart.so`, `nvcc`, or CUDA driver compatibility layer is installed.
-- No claim that arbitrary CUDA binaries/libraries run unmodified.
-- No claim of CUDA/OpenCL/ROCm framework compatibility without build+runtime evidence on S30.
+## What works on this GPU
 
-## Safety
+| Area | Verified |
+|---|---|
+| `__global__` kernels, `<<<grid, block>>>`, `mp_10` codegen | yes |
+| Device/context/properties queries (`musaDeviceProp`: 8 SMs, warp 128) | yes |
+| `cudaMalloc`, `cudaMemcpy*`, `cudaMemset`, `cudaFree` | yes |
+| Streams, events, `cudaEventElapsedTime` | yes |
+| Pinned host memory (`cudaMallocHost`) | yes |
+| Unified memory (`cudaMallocManaged`) | yes |
+| `__half` / `__half2` arithmetic and `half2float` | yes |
+| Driver API: `cuInit`, contexts, `cuMemAlloc`, HtoD/DtoH, attributes | yes |
+| `cudaMemGetInfo`, `cuMemGetInfo` | yes |
+| CMake `LANGUAGES CUDA`, plain Makefiles, Meson via `CUDACXX` | yes |
+| `libcudart` / `libcuda` link names for pre-linked objects | yes |
 
-- Do not install legacy 5.2.0 `libmusa`/driver-API packages into the validated 3.1.0+1.5.4 stack.
-- Verify ABI compatibility before substituting runtimes: 1.5.4 and 5.2.0 runtime ABIs differ.
+## What does not work
+
+| Gap | Reason |
+|---|---|
+| `cudaMallocAsync`, `cudaMallocFromPool*`, `cudaMemPool*` | runtime 1.5.4 exports no symbol |
+| `cudaExternal*Memory` / `*Semaphore` | not exported |
+| `cudaGraph*` beyond legacy entry points, `cuGraphAddKernelNode_v2` | not exported (init/launch works) |
+| `cudaDeviceGetDevResource`, `cudaDevSmResourceSplit` | 5.x only |
+| Device-side `printf`/`malloc` from kernels | no device runtime in MUSA; `cudadevrt` is a link-name stub |
+| MR, cooperative groups beyond header-only helpers | untested here |
+| `nvrtc` runtime compilation | not shipped by the vendor |
+
+Anything listed above fails at compile or link time. Nothing degrades
+silently.
+
+### Wording worth keeping straight
+
+* The `cudadevrt` library is **empty**. MUSA bundles device code inside `mcc`
+  and has no equivalent library, so the name exists only because CMake's CUDA
+  support always links it. Do not assume device-side `malloc` works because a
+  binary links.
+* `CUDART_VERSION`/`CUDA_VERSION` report **11000**. That is the source API
+  level of these headers, not the CUDA version MUSA derives from.
+* `cudaGetDeviceProperties` reports `cc 1.0`. That is the MUSA value
+  (`mp_10`), *not* `sm_10`; CMake needs `-DCMAKE_CUDA_ARCHITECTURES=52` (or
+  any value) because every gencode spelling collapses to `mp_10`, but
+  `sm_10` itself is rejected by CMake's architecture validation.
+* `libcudart.so.11.0` and `libcuda.so.1` are jump shims, not reimplementations:
+  each entry point is a `jmp` to the MUSA symbol.
+
+## Usage
+
+```sh
+nvcc -O2 -o app app.cu                       # bin/nvcc is on PATH via /usr/local/cuda
+cmake -B build -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc ..
+make -C build && ./build/app
+```
+
+Include paths: `-I/usr/local/cuda/include`. Library paths: `-L/usr/local/cuda/lib64`.
+
+## Why the 1.5.4 runtime and not 5.x
+
+The 5.x runtime asks the kernel driver for `MTGPU_QUERY_CMD_MKT_NAME`, which
+the only S30 driver (mtgpu 3.1.0) does not implement, so `muInit` fails with
+`-22`. This layer is therefore generated against 1.5.4 and pinned to it with
+`Requires: musa-runtime = 1.5.4`. If a future driver implements that ioctl,
+regenerate against 5.x — the generator is runtime-agnostic.

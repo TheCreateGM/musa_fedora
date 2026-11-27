@@ -13,6 +13,12 @@ URL:            https://github.com/TheCreateGM/musa_fedora
 Source0:        %{name}-%{version}.tar.gz
 BuildArch:      x86_64
 
+BuildRequires:  make
+BuildRequires:  gcc
+# Link verification: the shims are checked with --no-undefined against the
+# exact runtime whose symbols they jump to. The project repo supplies it.
+BuildRequires:  musa-runtime = 1.5.4
+
 # The layer maps CUDA names onto MUSA 1.5.4 symbols, so it must match the
 # runtime it was generated from. Install the compiler for the nvcc wrapper.
 Requires:       musa-runtime = 1.5.4
@@ -48,8 +54,12 @@ issues a query the 3.1.0 driver does not implement, so it is not used here.
 %autosetup -n %{name}-%{version}
 
 %build
-# Assemble the jump shims from the committed assembly sources.
+# Assemble the jump shims from the committed assembly sources, and build the
+# empty device-runtime stub. CMake's CUDA support always links cudadevrt and
+# cudart; MUSA bundles device code in mcc, so the stub only satisfies the name.
 make all
+printf '/* device runtime placeholder: MUSA bundles device code in mcc */\n' >cudadevrt.c
+gcc -O2 -fPIC -shared -o libcudadevrt.so cudadevrt.c -Wl,-soname,libcudadevrt.so
 
 %install
 mkdir -p %{buildroot}%{_libdir}/%{name}/{bin,include,lib64,nvvm/libdevice}
@@ -65,30 +75,28 @@ ln -s libcudart.so.11.0 %{buildroot}%{_libdir}/%{name}/lib64/libcudart.so
 ln -s libcuda.so.1 %{buildroot}%{_libdir}/%{name}/lib64/libcuda.so
 # Static runtime variants and the empty device-runtime stub map onto the MUSA
 # archives: CMake's CUDA support always links these names.
-ln -s /usr/local/musa/lib/libmusart_static.a \
+ln -s ../../../local/musa/lib/libmusart_static.a \
     %{buildroot}%{_libdir}/%{name}/lib64/libcudart_static.a
-ln -s /usr/local/musa/lib/libmusa_static.a \
+ln -s ../../../local/musa/lib/libmusa_static.a \
     %{buildroot}%{_libdir}/%{name}/lib64/libcuda_static.a
-: > %{buildroot}%{_libdir}/%{name}/lib64/cudadevrt.c
-cd %{buildroot}%{_libdir}/%{name}/lib64
-gcc -O2 -fPIC -shared -o libcudadevrt.so cudadevrt.c -Wl,-soname,libcudadevrt.so
-rm -f cudadevrt.c
+install -m 0755 libcudadevrt.so %{buildroot}%{_libdir}/%{name}/lib64/
 
 # Toolkit discovery: CMake requires <root>/nvvm/libdevice to exist.
-ln -s /usr/local/musa-5.2/mtgpu/bitcode/libdevice.bc \
+ln -s ../../../../local/musa-5.2/mtgpu/bitcode/libdevice.bc \
     %{buildroot}%{_libdir}/%{name}/nvvm/libdevice/libdevice.10.bc
 
 # Also expose the shims on the default library path so a plain `-lcudart`
 # works without -L, and so already-linked CUDA binaries run.
-ln -s %{_libdir}/%{name}/lib64/libcudart.so.11.0 %{buildroot}%{_libdir}/libcudart.so.11.0
-ln -s %{_libdir}/%{name}/lib64/libcudart.so.11.0 %{buildroot}%{_libdir}/libcudart.so.11
-ln -s %{_libdir}/%{name}/lib64/libcudart.so.11.0 %{buildroot}%{_libdir}/libcudart.so
-ln -s %{_libdir}/%{name}/lib64/libcuda.so.1 %{buildroot}/%{_libdir}/libcuda.so.1
-ln -s %{_libdir}/%{name}/lib64/libcuda.so.1 %{buildroot}/%{_libdir}/libcuda.so
+ln -s %{name}/lib64/libcudart.so.11.0 %{buildroot}%{_libdir}/libcudart.so.11.0
+ln -s %{name}/lib64/libcudart.so.11.0 %{buildroot}%{_libdir}/libcudart.so.11
+ln -s %{name}/lib64/libcudart.so.11.0 %{buildroot}%{_libdir}/libcudart.so
+ln -s %{name}/lib64/libcuda.so.1 %{buildroot}%{_libdir}/libcuda.so.1
+ln -s %{name}/lib64/libcuda.so.1 %{buildroot}%{_libdir}/libcuda.so
+ln -s %{name}/lib64/libcudadevrt.so %{buildroot}%{_libdir}/libcudadevrt.so
 
 # Conventional CUDA_HOME, but only if nothing else owns it.
 mkdir -p %{buildroot}/usr/local
-ln -s %{_libdir}/%{name} %{buildroot}/usr/local/cuda
+ln -s ../lib64/%{name} %{buildroot}/usr/local/cuda
 
 install -d -m 0755 %{buildroot}%{_sysconfdir}/ld.so.conf.d
 echo '%{_libdir}' > %{buildroot}%{_sysconfdir}/ld.so.conf.d/musa-cuda-compat.conf
@@ -107,6 +115,7 @@ install -d %{buildroot}%{_mandir}/man1
 %{_libdir}/libcudart.so
 %{_libdir}/libcuda.so.1
 %{_libdir}/libcuda.so
+%{_libdir}/libcudadevrt.so
 /usr/local/cuda
 %config(noreplace) %{_sysconfdir}/ld.so.conf.d/musa-cuda-compat.conf
 %{_mandir}/man1/musa-cuda-compat.1.gz

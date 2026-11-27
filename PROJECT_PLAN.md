@@ -216,11 +216,19 @@ reboots, and LLM inference runs on the S30 via `apps/musa-infer` (see
 [docs/hardware-validation-2026-11-27-reverify.md](docs/hardware-validation-2026-11-27-reverify.md)).
 The items below are the ones that remain open.
 
-### 1. RPM OpenPGP signing
+### 1. RPM OpenPGP signing — done 2026-11-27
 
 The local build tooling produces signed artifacts and the trust setup is
-documented in [docs/rpm-signing.md](docs/rpm-signing.md); a host-wide trust
-rollout is still a deliberate manual step, not automated.
+documented in [docs/rpm-signing.md](docs/rpm-signing.md). Closed on
+2026-11-27: all **8/8** local-build RPMs (the six-package set plus
+`musa-runtime-display` and `musa-cuda-compat`) were signed with the local
+build-signing key `763A7D1470E1672E236F290EFBA85A80C8D8BC89`, and that public
+key was then imported into the system RPM keyring through `pkexec rpm --import`,
+so plain `rpm -K` now reports `digests signatures OK` on the whole set. The
+import is reversible (`pkexec rpm -e gpg-pubkey-763a7d1470e1672e236f290efba85a80c8d8bc89`),
+and packages published through Copr keep Copr's own build-service signature.
+Standing requirement: re-run `scripts/rpm-signing.sh sign` after every local
+rebuild, because a new package is unsigned until signed.
 
 ### 2. Broader feature and framework support (vendor-dependent)
 

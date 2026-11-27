@@ -101,3 +101,14 @@ matrix are needed before extending the claim.
 - COPR `axogm/musa-fedora` enabled chroots: `fedora-43/44/45/rawhide/eln-x86_64`. Validated local-spec packages built successfully for fedora-43-x86_64: mtgpu-firmware 11392834, mtgpu-dkms 11392833, musa-runtime 11392835, musa-toolkit 11392838, musa-sdk 11392839.
 - Legacy COPR packages `libmusa` and `libdrm-mtgpu` (5.2.0-1 upload sources, no latest builds) are **not compatible** with the validated 3.1.0+1.5.4 stack and must not be built/installed into it.
 - Scope boundary unchanged: verified MUSA compute/runtime/compiler/VAAPI paths on this host; no claim of vendor-qualified Fedora support, OpenCL MT ICD, display rendering, or general framework compatibility without evidence.
+
+## 2026-11-27 second-pass re-verify (Fedora 45 / kernel 7.3.4)
+
+Same boot as [hardware-validation-2026-11-27-reverify](hardware-validation-2026-11-27-reverify.md); every gate was re-run from scratch in a later session of that boot and reproduced its result.
+
+- Validated package set **currently** on the host: `mtgpu-dkms-3.1.0-16.fc45`, `mtgpu-firmware-3.1.0-5.fc45`, `musa-runtime-1.5.4-8.fc45`, `musa-runtime-va-1.5.4-8.fc45`, `musa-sdk-5.2.0-7.fc45`, `musa-toolkit-3.1.0-6.fc45`, `musa-cuda-compat-1.0.0-1.fc45`, `mvgal-0.7.48-1.fc45` (`rpm -qa`). The 3.1.0-15 / 3.1.0-5 figures above were correct for 2026-11-26 and are kept as history.
+- `scripts/check-musa-env.sh` **PASS**; `scripts/verify-musa.sh --skip-memcpy` **15/0/2**; `scripts/s30-perf.sh` **PASS** (best triad 52.0 GB/s at blockDim 1024, two-stream pipeline 1.14x with verified output, 1 cache-config SKIP); `scripts/hardware/test-vaapi.sh` **14/0/0**; `tests/cuda-compat/run.sh` **7/7**; `tests/musa-infer/run.sh` **PASS**; `scripts/test-container-install.sh --skip-memcpy` **13/0**; `scripts/verify-copr-chroots.sh` **20/20**; `scripts/test-toolchain.sh` compile-only **PASS**.
+- `apps/musa-infer --bench` on TinyLlama-1.1B-Chat Q8_0: prompt 12.59 tok/s, generate **12.50 tok/s** over 16 tokens, which matches the figure recorded earlier the same day.
+- Journal: **0** `mtgpu` fault/oops/bug entries for the whole boot after all of the above.
+- The two transient `musa-cuda-compat` COPR failures (11393017, 11393009) were root-caused in their `builder-live.log.gz`: `%build` died with `make: command not found`. The spec fix landed in `f8a5c98` (`BuildRequires: make gcc musa-runtime = 1.5.4`); builds 11393082/11393083 supersede them and succeeded in all five x86_64 chroots.
+- Local RPM signing closed: `signed packages 0/8` → `8/8`, and after a `pkexec rpm --import` of the project key a plain `rpm -K` reports `digests signatures OK` for all eight. See [rpm-signing](rpm-signing.md).

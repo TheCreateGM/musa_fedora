@@ -16,12 +16,14 @@ normal boot through udev, with compute mode enabled. Installed stack:
 
 | Package | Version |
 |---|---|
-| `mtgpu-dkms` | 3.1.0-15 on the host; 3.1.0-16 published (objtool fallback, [record](objtool-fallback-2026-11-25.md)) |
+| `mtgpu-dkms` | 3.1.0-16 (objtool fallback, [record](objtool-fallback-2026-11-25.md)) |
 | `mtgpu-firmware` | 3.1.0-5 |
 | `musa-runtime` | 1.5.4-8 |
 | `musa-runtime-va` | 1.5.4-8 |
 | `musa-sdk` | 5.2.0-7 |
-| `musa-toolkit` | 3.1.0-5 on the host; 3.1.0-6 published (README payload refresh) |
+| `musa-toolkit` | 3.1.0-6 (README payload refresh) |
+| `musa-cuda-compat` | 1.0.0-1 |
+| `mvgal` | 0.7.48-1 |
 
 `scripts/verify-musa.sh --skip-memcpy` reports **15 passed, 0 failed, 2
 skipped**. The skips are the vendor `muMemcpyTest` (it needs more host RAM than

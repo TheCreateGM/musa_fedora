@@ -39,6 +39,48 @@ repository; the revocation certificate (`*.rev`) is not. This closes the
 "local packages are unsigned by default" gap for the current local-build
 tree; packages published by Copr remain signed by the Copr build service.
 
+## Host-wide trust rollout — 2026-11-27
+
+Until this session the system RPM keyring did not know the project key, so
+plain `rpm -K` reported `digests SIGNATURES NOT OK` on local packages while
+`scripts/rpm-signing.sh verify` (temporary keyring) reported `OK`. Both halves
+of that gap are now closed:
+
+1. **Signing.** The current local-build tree holds 8 RPMs — `mtgpu-dkms`
+   3.1.0-16, `mtgpu-firmware` 3.1.0-5, `musa-runtime` 1.5.4-8,
+   `musa-runtime-va` 1.5.4-8, `musa-runtime-display` 1.5.4-8, `musa-sdk`
+   5.2.0-7, `musa-toolkit` 3.1.0-6 and `musa-cuda-compat` 1.0.0-1. All eight
+   were unsigned (`signed packages: 0/8`); `scripts/rpm-signing.sh sign`
+   signed every one (`SIGNED_PACKAGES: 8`) and `verify` then reported
+   `VERIFIED_PACKAGES: 8`, each `OK` against
+   `packaging/rpm/keys/musa-fedora-signing-key.asc`.
+2. **Trust rollout.** The public key was imported into the system RPM keyring
+   with elevated privileges and an absolute path:
+
+   ```sh
+   pkexec rpm --import /home/axogm/Documents/project/musa-fedora/packaging/rpm/keys/musa-fedora-signing-key.asc
+   ```
+
+   A relative path fails with `import read failed(2)` under `pkexec` — the
+   working directory is not what the script expects. Afterwards `rpm -K` on
+   the whole local set reports **`digests signatures OK` for 8/8**, and
+   `rpm -qa gpg-pubkey*` shows
+   `gpg-pubkey-763a7d1470e1672e236f290efba85a80c8d8bc89-6afc1175`.
+
+Signing touches only the RPM header: the cpio payloads of the signed packages
+are byte-identical to their `.unsigned` backups
+(`rpm2cpio … | sha256sum` → `a4b5265f…` and `9fb64893…` for `musa-sdk` and
+`mtgpu-dkms`, and `rpm -K --nosignature` still reports `digests OK`), so the
+package payloads did not change. Rolling the key back out of the system
+keyring is:
+
+```sh
+pkexec rpm -e gpg-pubkey-763a7d1470e1672e236f290efba85a80c8d8bc89
+```
+
+Re-run `scripts/rpm-signing.sh sign` after each local rebuild: a freshly built
+package is unsigned until signed, and `check` reports the current ratio.
+
 ## Creating the key
 
 ```sh
